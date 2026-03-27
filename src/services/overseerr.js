@@ -24,6 +24,17 @@ function createOverseerrClient(config) {
     return `${base}/${path}`;
   }
 
+  function withQuery(pathname, params) {
+    const url = new URL(buildEndpoint(pathname));
+    for (const [key, value] of Object.entries(params || {})) {
+      if (value === undefined || value === null || value === "") {
+        continue;
+      }
+      url.searchParams.set(key, String(value));
+    }
+    return url.toString();
+  }
+
   function ensureConfigured() {
     const base = normalizedBaseUrl();
     if (!base || !config.apiKey) {
@@ -75,9 +86,11 @@ function createOverseerrClient(config) {
     getRequestStatusText: (status) => REQUEST_STATUS[status] || `Unknown (${status})`,
     searchMedia: async (query, mediaType = "all") => {
       const client = getClient();
-      const response = await client.get(buildEndpoint("api/v1/search"), {
-        params: { query }
-      });
+      const response = await client.get(
+        withQuery("api/v1/search", {
+          query
+        })
+      );
 
       const all = response.data?.results || [];
       const filtered =
@@ -103,16 +116,23 @@ function createOverseerrClient(config) {
     },
     getRecentRequests: async (take = 20) => {
       const client = getClient();
-      const response = await client.get(buildEndpoint("api/v1/request"), {
-        params: { take, skip: 0 }
-      });
+      const response = await client.get(
+        withQuery("api/v1/request", {
+          take,
+          skip: 0
+        })
+      );
       return response.data?.results || [];
     },
     findUserByUsername: async (username) => {
       const client = getClient();
-      const response = await client.get(buildEndpoint("api/v1/user"), {
-        params: { take: 100, skip: 0, sort: "created" }
-      });
+      const response = await client.get(
+        withQuery("api/v1/user", {
+          take: 100,
+          skip: 0,
+          sort: "created"
+        })
+      );
 
       const users = response.data?.results || [];
       const match = users.find(

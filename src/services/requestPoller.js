@@ -41,13 +41,15 @@ function extractRequestData(item, overseerr) {
     "Unknown title"
   );
 
+  const effectiveStatus = overseerr.resolveEffectiveStatus(item);
+
   return {
     requestId: item.id,
     mediaType,
     mediaId,
     title,
-    status: item.status,
-    statusText: overseerr.getRequestStatusText(item.status),
+    status: effectiveStatus,
+    statusText: overseerr.getRequestStatusText(effectiveStatus),
     requestedBy: item.requestedBy?.id || null
   };
 }
@@ -119,9 +121,32 @@ function createRequestPoller({ config, logger, db, overseerr, bot }) {
     }
 
     try {
-      const requests = await overseerr.getRecentRequests(30);
+      const recentRequests = await overseerr.getRecentRequests(50);
+      const trackedIds = db.getAllRequestIds().slice(0, 200);
+      const candidateMap = new Map();
 
-      for (const request of requests) {
+      for (const request of recentRequests) {
+        if (request?.id) {
+          candidateMap.set(request.id, request);
+        }
+      }
+
+      for (const requestId of trackedIds) {
+        if (candidateMap.has(requestId)) {
+          continue;
+        }
+
+        try {
+          const details = await overseerr.getRequestById(requestId);
+          if (details?.id) {
+            candidateMap.set(details.id, details);
+          }
+        } catch (error) {
+          // Ignore individual failures and continue with other tracked requests.
+        }
+      }
+
+      for (const request of candidateMap.values()) {
         if (!request?.id) {
           continue;
         }

@@ -2,6 +2,7 @@ const axios = require("axios");
 const https = require("https");
 
 const REQUEST_STATUS = {
+  0: "Unknown",
   1: "Pending",
   2: "Approved",
   3: "Declined",
@@ -116,6 +117,52 @@ function createOverseerrClient(config) {
     return [];
   }
 
+  function mediaStatusToCode(value) {
+    if (value === undefined || value === null) {
+      return 0;
+    }
+
+    if (Number.isInteger(value)) {
+      return value;
+    }
+
+    const normalized = String(value).trim().toUpperCase();
+    const map = {
+      UNKNOWN: 0,
+      PENDING: 1,
+      APPROVED: 2,
+      DECLINED: 3,
+      AVAILABLE: 4,
+      PROCESSING: 5,
+      PARTIALLY_AVAILABLE: 6
+    };
+
+    return map[normalized] ?? 0;
+  }
+
+  function resolveEffectiveStatus(item) {
+    const requestStatus = Number(item?.status || 0);
+    const mediaStatusCode = mediaStatusToCode(item?.media?.status || item?.mediaStatus);
+
+    if (requestStatus === 3) {
+      return 3;
+    }
+
+    if ([4, 5, 6].includes(mediaStatusCode)) {
+      return mediaStatusCode;
+    }
+
+    if (requestStatus > 0) {
+      return requestStatus;
+    }
+
+    if (mediaStatusCode > 0) {
+      return mediaStatusCode;
+    }
+
+    return 0;
+  }
+
   function extractSeasonNumbersFromNode(node, out) {
     if (!node || typeof node !== "object") {
       return;
@@ -176,7 +223,20 @@ function createOverseerrClient(config) {
   }
 
   return {
-    getRequestStatusText: (status) => REQUEST_STATUS[status] || `Unknown (${status})`,
+    getRequestStatusText: (status) => {
+      const parsed = Number(status);
+      if (Number.isInteger(parsed) && REQUEST_STATUS[parsed]) {
+        return REQUEST_STATUS[parsed];
+      }
+
+      const fromMedia = mediaStatusToCode(status);
+      if (REQUEST_STATUS[fromMedia]) {
+        return REQUEST_STATUS[fromMedia];
+      }
+
+      return `Unknown (${status})`;
+    },
+    resolveEffectiveStatus,
     searchMedia: async (query, mediaType = "all") => {
       const client = getClient();
       const rawQuery = String(query || "").trim();

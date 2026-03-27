@@ -250,26 +250,53 @@ function createJellyfinClient(config) {
       const userId = await resolveUserId(client);
       const normalizedLimit = Math.max(1, Math.min(20, Number(limit || 8)));
       const normalizedType = String(mediaType || "all").toLowerCase();
+      const searchTerm = String(query || "").trim();
+      if (!searchTerm) {
+        return [];
+      }
       const includeTypeMap = {
-        all: "Movie,Series,Episode,Audio",
+        all: "Movie,Series,Episode,Audio,MusicAlbum,MusicVideo,Video",
         movie: "Movie",
         series: "Series",
         tv: "Series",
         episode: "Episode",
-        audio: "Audio"
+        audio: "Audio,MusicAlbum,MusicVideo"
       };
 
-      const response = await client.get(buildEndpoint(`Users/${userId}/Items`), {
-        params: {
-          SearchTerm: String(query || "").trim(),
-          Recursive: true,
-          Limit: normalizedLimit,
-          IncludeItemTypes: includeTypeMap[normalizedType] || includeTypeMap.all,
-          Fields: "ProductionYear,RunTimeTicks,SeriesName,IndexNumber,ParentIndexNumber"
-        }
-      });
+      const commonParams = {
+        SearchTerm: searchTerm,
+        Recursive: true,
+        Limit: normalizedLimit,
+        IncludeItemTypes: includeTypeMap[normalizedType] || includeTypeMap.all,
+        Fields: "ProductionYear,RunTimeTicks,SeriesName,IndexNumber,ParentIndexNumber"
+      };
 
-      const rows = Array.isArray(response?.data?.Items) ? response.data.Items : [];
+      async function requestItems(pathname, params) {
+        try {
+          const response = await client.get(buildEndpoint(pathname), { params });
+          const rows = Array.isArray(response?.data?.Items) ? response.data.Items : [];
+          return rows;
+        } catch {
+          return [];
+        }
+      }
+
+      // Primary: user-scoped query
+      let rows = await requestItems(`Users/${userId}/Items`, commonParams);
+
+      // Fallback: global Items endpoint scoped by UserId query parameter
+      if (rows.length === 0) {
+        rows = await requestItems("Items", {
+          ...commonParams,
+          UserId: userId
+        });
+      }
+
+      // Final fallback: global search without UserId for reverse-proxy edge cases
+      if (rows.length === 0) {
+        rows = await requestItems("Items", commonParams);
+      }
+
       return rows.map(normalizeItem);
     },
     getNowPlaying: async (limit = 8) => {

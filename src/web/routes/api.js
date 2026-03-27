@@ -162,7 +162,7 @@ function requireAuth(db) {
   };
 }
 
-function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, logger }) {
+function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, bot, logger }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
 
@@ -905,6 +905,77 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
       });
     } catch (error) {
       next(error);
+    }
+  });
+
+  router.get("/lidarr/options", async (req, res, next) => {
+    try {
+      if (!lidarr || typeof lidarr.getOptions !== "function") {
+        return res.status(503).json({ error: "Lidarr service is unavailable." });
+      }
+
+      const options = await lidarr.getOptions();
+      return res.json({ ok: true, ...options });
+    } catch (error) {
+      next(new Error(`Lidarr options failed: ${error.message}`));
+    }
+  });
+
+  router.get("/lidarr/search", async (req, res, next) => {
+    try {
+      if (!lidarr || typeof lidarr.searchArtists !== "function") {
+        return res.status(503).json({ error: "Lidarr service is unavailable." });
+      }
+
+      const query = String(req.query.query || "").trim();
+      if (!query) {
+        return res.status(400).json({ error: "query is required" });
+      }
+
+      const results = await lidarr.searchArtists(query);
+      return res.json({ ok: true, count: results.length, results });
+    } catch (error) {
+      next(new Error(`Lidarr search failed: ${error.message}`));
+    }
+  });
+
+  router.post("/lidarr/request", async (req, res, next) => {
+    try {
+      if (!lidarr || typeof lidarr.addArtist !== "function") {
+        return res.status(503).json({ error: "Lidarr service is unavailable." });
+      }
+
+      const artist = req.body?.artist;
+      const options = req.body?.options || {};
+      if (!artist || typeof artist !== "object") {
+        return res.status(400).json({ error: "artist payload is required" });
+      }
+
+      const created = await lidarr.addArtist({ artist, options });
+      const localArtistId = Number(created.id || 0);
+      const title = String(created.artistName || artist.artistName || artist.sortName || "Unknown artist").trim();
+      const requestId = -Math.max(localArtistId || Date.now(), 1);
+
+      db.upsertRequestEvent({
+        requestId,
+        mediaType: "music",
+        mediaId: localArtistId > 0 ? localArtistId : 0,
+        title,
+        status: 2,
+        statusText: "Added to Lidarr",
+        requestedBy: req.auth?.user?.id || null
+      });
+
+      return res.json({
+        ok: true,
+        requestId,
+        title,
+        status: 2,
+        statusText: "Added to Lidarr",
+        artist: created
+      });
+    } catch (error) {
+      next(new Error(`Lidarr request failed: ${error.message}`));
     }
   });
 

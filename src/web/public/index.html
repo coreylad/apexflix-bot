@@ -218,7 +218,7 @@
         <!--  TAB: Requests  -->
         <div id="tabRequests" class="tab-pane">
           <p class="pane-title">Requests</p>
-          <p class="pane-sub">Submit and track Overseerr media requests.</p>
+          <p class="pane-sub">Submit and track Overseerr requests, plus direct music adds through Lidarr.</p>
 
           <div class="grid-2">
             <div class="card">
@@ -259,6 +259,82 @@
                   <thead><tr><th>#</th><th>Title</th><th>Type</th><th>Status</th></tr></thead>
                   <tbody id="reqTableBody"><tr><td colspan="4" class="empty-state">Loading</td></tr></tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:1rem">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Add Music with Lidarr</div>
+                <div class="card-subtitle">Search for an artist, choose monitoring rules, and send it straight to Lidarr.</div>
+              </div>
+              <button type="button" class="btn-secondary btn-sm" id="lidarrOptionsRefreshBtn">Refresh Options</button>
+            </div>
+
+            <div class="grid-2" style="align-items:start">
+              <div>
+                <form id="lidarrSearchForm" style="display:grid;gap:0.9rem">
+                  <label>Artist or MusicBrainz URL/ID
+                    <input type="text" id="lidarrArtistQuery" placeholder="e.g. Radiohead or https://musicbrainz.org/artist/..." />
+                  </label>
+
+                  <div class="settings-grid">
+                    <label>Root Folder
+                      <select id="lidarrRootFolder"></select>
+                    </label>
+                    <label>Quality Profile
+                      <select id="lidarrQualityProfile"></select>
+                    </label>
+                    <label>Metadata Profile
+                      <select id="lidarrMetadataProfile"></select>
+                    </label>
+                    <label>Monitor Existing Albums
+                      <select id="lidarrMonitor">
+                        <option value="all">All</option>
+                        <option value="future">Future</option>
+                        <option value="missing">Missing</option>
+                        <option value="existing">Existing</option>
+                        <option value="first">First</option>
+                        <option value="latest">Latest</option>
+                        <option value="none">None</option>
+                      </select>
+                    </label>
+                    <label>Monitor New Albums
+                      <select id="lidarrMonitorNewItems">
+                        <option value="all">All</option>
+                        <option value="new">New Only</option>
+                        <option value="none">None</option>
+                      </select>
+                    </label>
+                    <label>Monitored
+                      <select id="lidarrMonitored">
+                        <option value="true">Monitored</option>
+                        <option value="false">Unmonitored</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label style="display:flex;align-items:center;gap:0.55rem">
+                    <input type="checkbox" id="lidarrSearchForMissingAlbums" checked />
+                    Search for missing albums after add
+                  </label>
+
+                  <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+                    <button type="submit" class="btn-primary">Search Artists</button>
+                  </div>
+                </form>
+                <div id="lidarrMsg" class="msg"></div>
+                <div id="lidarrOptionsHint" class="muted-text" style="margin-top:0.65rem"></div>
+              </div>
+
+              <div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead><tr><th>Artist</th><th>Status</th><th>Action</th></tr></thead>
+                    <tbody id="lidarrResultsBody"><tr><td colspan="3" class="empty-state">Search to see Lidarr artist matches</td></tr></tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>

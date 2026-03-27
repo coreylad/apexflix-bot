@@ -39,6 +39,7 @@ function firstDefined(names, fallback = "") {
 const config = {
   discord: {},
   overseerr: {},
+  lidarr: {},
   jellyfin: {},
   app: {}
 };
@@ -52,6 +53,17 @@ function refreshConfigFromProcess() {
   config.overseerr.apiKey = optional("OVERSEERR_API_KEY");
   config.overseerr.defaultUserId = optionalNumber("OVERSEERR_DEFAULT_USER_ID", 1);
   config.overseerr.allowInsecureTls = optionalBoolean("OVERSEERR_ALLOW_INSECURE_TLS", false);
+
+  config.lidarr.url = firstDefined(["LIDARR_URL", "LIDARR_BASE_URL"]).replace(/\/$/, "");
+  config.lidarr.apiKey = optional("LIDARR_API_KEY");
+  config.lidarr.allowInsecureTls = optionalBoolean("LIDARR_ALLOW_INSECURE_TLS", false);
+  config.lidarr.rootFolderPath = optional("LIDARR_ROOT_FOLDER");
+  config.lidarr.qualityProfileId = optionalNumber("LIDARR_QUALITY_PROFILE_ID", 0);
+  config.lidarr.metadataProfileId = optionalNumber("LIDARR_METADATA_PROFILE_ID", 0);
+  config.lidarr.monitor = optional("LIDARR_MONITOR", "all").toLowerCase();
+  config.lidarr.monitorNewItems = optional("LIDARR_MONITOR_NEW_ITEMS", "all").toLowerCase();
+  config.lidarr.monitored = optionalBoolean("LIDARR_MONITORED", true);
+  config.lidarr.searchForMissingAlbums = optionalBoolean("LIDARR_SEARCH_FOR_MISSING_ALBUMS", true);
 
   config.jellyfin.url = firstDefined(["JELLYFIN_URL", "JELLYFIN_BASE_URL"]).replace(/\/$/, "");
   config.jellyfin.apiKey = optional("JELLYFIN_API_KEY");

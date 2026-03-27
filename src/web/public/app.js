@@ -91,6 +91,22 @@ function renderEnvForm(targetId, allowedKeys, values) {
       ]
     },
     {
+      title: "Lidarr",
+      keys: [
+        "LIDARR_URL",
+        "LIDARR_BASE_URL",
+        "LIDARR_API_KEY",
+        "LIDARR_ALLOW_INSECURE_TLS",
+        "LIDARR_ROOT_FOLDER",
+        "LIDARR_QUALITY_PROFILE_ID",
+        "LIDARR_METADATA_PROFILE_ID",
+        "LIDARR_MONITOR",
+        "LIDARR_MONITOR_NEW_ITEMS",
+        "LIDARR_MONITORED",
+        "LIDARR_SEARCH_FOR_MISSING_ALBUMS"
+      ]
+    },
+    {
       title: "Jellyfin",
       keys: [
         "JELLYFIN_URL",
@@ -152,6 +168,7 @@ let activeTab = "tabDashboard";
 let logEventSource = null;
 let logUnreadCount = 0;
 let jellyfinLogsAutoRefreshTimer = null;
+let lidarrArtistResults = [];
 
 function switchTab(id) {
   if (activeTab === id) return;
@@ -177,6 +194,7 @@ function onTabActivated(id) {
       break;
     case "tabRequests":
       loadRequestsTable();
+      loadLidarrOptions();
       break;
     case "tabJellyfin":
       loadJellyfinStats();
@@ -414,6 +432,176 @@ function wireRequestForm() {
       setMsg("requestMsg", err.message, "err");
     }
   });
+}
+
+function renderSelectOptions(elementId, items, selectedValue, valueKey, labelKey) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  const rows = Array.isArray(items) ? items : [];
+  el.innerHTML = rows
+    .map((item) => {
+      const value = String(item?.[valueKey] ?? "");
+      const label = String(item?.[labelKey] ?? value);
+      const selected = value === String(selectedValue ?? "") ? " selected" : "";
+      return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+}
+
+async function loadLidarrOptions() {
+  const hint = document.getElementById("lidarrOptionsHint");
+  try {
+    const data = await fetchJson("api/lidarr/options");
+    const defaults = data.defaults || {};
+    const rootFolders = (data.rootFolders || []).map((item) => ({
+      path: item.path,
+      label: item.name ? `${item.name} (${item.path})` : item.path
+    }));
+    const qualityProfiles = (data.qualityProfiles || []).map((item) => ({ id: String(item.id), label: item.name }));
+    const metadataProfiles = (data.metadataProfiles || []).map((item) => ({ id: String(item.id), label: item.name }));
+
+    renderSelectOptions("lidarrRootFolder", rootFolders, defaults.rootFolderPath, "path", "label");
+    renderSelectOptions(
+      "lidarrQualityProfile",
+      qualityProfiles,
+      String(defaults.qualityProfileId || ""),
+      "id",
+      "label"
+    );
+    renderSelectOptions(
+      "lidarrMetadataProfile",
+      metadataProfiles,
+      String(defaults.metadataProfileId || ""),
+      "id",
+      "label"
+    );
+
+    const monitor = document.getElementById("lidarrMonitor");
+    const monitorNewItems = document.getElementById("lidarrMonitorNewItems");
+    const monitored = document.getElementById("lidarrMonitored");
+    const searchMissing = document.getElementById("lidarrSearchForMissingAlbums");
+    if (monitor) monitor.value = defaults.monitor || "all";
+    if (monitorNewItems) monitorNewItems.value = defaults.monitorNewItems || "all";
+    if (monitored) monitored.value = String(defaults.monitored !== false);
+    if (searchMissing) searchMissing.checked = defaults.searchForMissingAlbums !== false;
+
+    if (hint) {
+      hint.textContent = `Loaded ${rootFolders.length} root folders, ${qualityProfiles.length} quality profiles, and ${metadataProfiles.length} metadata profiles from Lidarr.`;
+    }
+  } catch (err) {
+    if (hint) hint.textContent = "";
+    setMsg("lidarrMsg", err.message, "err");
+  }
+}
+
+function getLidarrRequestOptions() {
+  return {
+    rootFolderPath: document.getElementById("lidarrRootFolder")?.value || "",
+    qualityProfileId: Number(document.getElementById("lidarrQualityProfile")?.value || 0),
+    metadataProfileId: Number(document.getElementById("lidarrMetadataProfile")?.value || 0),
+    monitor: document.getElementById("lidarrMonitor")?.value || "all",
+    monitorNewItems: document.getElementById("lidarrMonitorNewItems")?.value || "all",
+    monitored: (document.getElementById("lidarrMonitored")?.value || "true") === "true",
+    searchForMissingAlbums: Boolean(document.getElementById("lidarrSearchForMissingAlbums")?.checked)
+  };
+}
+
+function renderLidarrResults(results) {
+  const tbody = document.getElementById("lidarrResultsBody");
+  if (!tbody) return;
+
+  if (!results.length) {
+    tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No Lidarr artist results found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = results
+    .map((artist, index) => {
+      const status = artist.inLibrary
+        ? `<span class="badge badge-green">In Library</span>`
+        : `<span class="badge badge-blue">Available</span>`;
+      const meta = [artist.artistType, artist.status, artist.disambiguation].filter(Boolean).join(" • ");
+      const subtitle = meta ? `<div class="muted-text">${escapeHtml(meta)}</div>` : "";
+      return `<tr>
+        <td>
+          <div>${escapeHtml(artist.artistName || "Unknown artist")}</div>
+          ${subtitle}
+        </td>
+        <td>${status}</td>
+        <td><button type="button" class="btn-secondary btn-sm lidarr-add-btn" data-index="${index}"${artist.inLibrary ? " disabled" : ""}>Add to Lidarr</button></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function searchLidarrArtists() {
+  const query = String(document.getElementById("lidarrArtistQuery")?.value || "").trim();
+  if (!query) {
+    setMsg("lidarrMsg", "Enter an artist name or MusicBrainz URL/ID.", "err");
+    return;
+  }
+
+  setMsg("lidarrMsg", "Searching Lidarr", "info");
+  try {
+    const qs = new URLSearchParams({ query });
+    const data = await fetchJson(`api/lidarr/search?${qs.toString()}`);
+    lidarrArtistResults = data.results || [];
+    renderLidarrResults(lidarrArtistResults);
+    setMsg("lidarrMsg", `Found ${lidarrArtistResults.length} Lidarr artist result${lidarrArtistResults.length === 1 ? "" : "s"}.`, "ok");
+  } catch (err) {
+    lidarrArtistResults = [];
+    renderLidarrResults([]);
+    setMsg("lidarrMsg", err.message, "err");
+  }
+}
+
+async function requestLidarrArtist(index) {
+  const artist = lidarrArtistResults[index];
+  if (!artist?.payload) {
+    setMsg("lidarrMsg", "Selected Lidarr result is no longer available. Search again.", "err");
+    return;
+  }
+
+  setMsg("lidarrMsg", `Adding ${artist.artistName} to Lidarr`, "info");
+  try {
+    const data = await fetchJson("api/lidarr/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        artist: artist.payload,
+        options: getLidarrRequestOptions()
+      })
+    });
+    setMsg("lidarrMsg", data.message || `Added ${data.title || artist.artistName} to Lidarr.`, "ok");
+    lidarrArtistResults[index].inLibrary = true;
+    renderLidarrResults(lidarrArtistResults);
+    loadRequestsTable();
+  } catch (err) {
+    setMsg("lidarrMsg", err.message, "err");
+  }
+}
+
+function wireLidarrForm() {
+  const form = document.getElementById("lidarrSearchForm");
+  if (form && !form.dataset.wired) {
+    form.dataset.wired = "1";
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await searchLidarrArtists();
+    });
+  }
+
+  const results = document.getElementById("lidarrResultsBody");
+  if (results && !results.dataset.wired) {
+    results.dataset.wired = "1";
+    results.addEventListener("click", (e) => {
+      const btn = e.target.closest(".lidarr-add-btn");
+      if (!btn) return;
+      e.preventDefault();
+      requestLidarrArtist(Number(btn.dataset.index));
+    });
+  }
 }
 
 /*  jellyfin tab  */
@@ -961,7 +1149,9 @@ function wireAll(user) {
 
   // Requests
   wireRequestForm();
+  wireLidarrForm();
   bindButtonClick("reqRefreshBtn", loadRequestsTable);
+  bindButtonClick("lidarrOptionsRefreshBtn", loadLidarrOptions);
 
   // Jellyfin
   bindButtonClick("jellyRefreshNP", loadJellyfinNowPlaying);

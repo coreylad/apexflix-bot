@@ -2,6 +2,7 @@ const config = require("./config");
 const { createLogger } = require("./logger");
 const { initializeDatabase } = require("./db");
 const { createOverseerrClient } = require("./services/overseerr");
+const { createLidarrClient } = require("./services/lidarr");
 const { createJellyfinClient } = require("./services/jellyfin");
 const { createDiscordBot } = require("./bot/client");
 const { createWebServer } = require("./web/server");
@@ -18,6 +19,7 @@ async function bootstrap() {
   const envManager = createEnvManager();
 
   const overseerr = createOverseerrClient(config.overseerr);
+  const lidarr = createLidarrClient(config.lidarr);
   const jellyfin = createJellyfinClient(config.jellyfin);
 
   const bot = createDiscordBot({
@@ -33,6 +35,7 @@ async function bootstrap() {
     logger,
     db,
     overseerr,
+    lidarr,
     jellyfin,
     envManager,
     bot

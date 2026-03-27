@@ -17,7 +17,7 @@ const REQUEST_MODAL_MEDIA_TYPE = "media_type";
 const REQUEST_MODAL_MEDIA_ID = "media_id";
 const REQUEST_MODAL_SEASON = "season";
 
-function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
+function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
   const DEFAULT_BOT_CONFIG = {
     requestsChannelId: "",
     uploadsChannelId: "",
@@ -640,7 +640,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     const mediaType = new TextInputBuilder()
       .setCustomId(REQUEST_MODAL_MEDIA_TYPE)
-      .setLabel("Media Type (movie or tv)")
+      .setLabel("Media Type (movie, tv, or music)")
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setPlaceholder("movie")
@@ -648,10 +648,10 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     const mediaId = new TextInputBuilder()
       .setCustomId(REQUEST_MODAL_MEDIA_ID)
-      .setLabel("TMDB ID or TMDB URL")
+      .setLabel("TMDB ID/URL (movie,tv) or artist query (music)")
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
-      .setPlaceholder("1399 or https://www.themoviedb.org/tv/1399")
+      .setPlaceholder("1399, TMDB URL, or artist name/MBID")
       .setMaxLength(200);
 
     const season = new TextInputBuilder()
@@ -1116,13 +1116,16 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       "Run /request to open the request form.",
       "",
       "Form fields:",
-      "- Media Type: movie or tv",
-      "- TMDB ID or TMDB URL",
+      "- Media Type: movie, tv, or music",
+      "- Media input:",
+      "  - movie/tv: TMDB ID or TMDB URL",
+      "  - music: artist name, MusicBrainz ID, or MusicBrainz URL",
       "- Season (TV only): 1, all, latest, season1, season[1]",
       "",
       "Notes:",
       "- For TV, season is required in the form.",
       "- For movies, leave season empty.",
+      "- For music, leave season empty.",
       "- Seasons are validated against Seerr metadata before requesting."
     ].join("\n");
 
@@ -1197,7 +1200,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     await interaction.reply(toEphemeralResponse(formatSearchResults(results)));
   }
 
-  async function processRequestSubmission(interaction, { mediaType, mediaId, seasonInput }) {
+  async function processRequestSubmission(interaction, { mediaType, mediaInput, seasonInput }) {
     const botConfig = getBotConfig();
     if (
       botConfig.enforceRequestChannel &&
@@ -1209,6 +1212,71 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       );
       return;
     }
+
+    if (mediaType === "music") {
+      const query = String(mediaInput || "").trim();
+      if (!query) {
+        await interaction.reply(toEphemeralResponse("Provide an artist name, MBID, or MusicBrainz URL for music requests."));
+        return;
+      }
+
+      if (!lidarr || typeof lidarr.searchArtists !== "function" || typeof lidarr.addArtist !== "function") {
+        await interaction.reply(toEphemeralResponse("Lidarr is not configured on this bot yet."));
+        return;
+      }
+
+      const results = await lidarr.searchArtists(query);
+      if (!results.length) {
+        await interaction.reply(toEphemeralResponse(`No artist found in Lidarr lookup for: ${query}`));
+        return;
+      }
+
+      const selected = results.find((item) => !item.inLibrary) || results[0];
+      if (selected.inLibrary) {
+        await interaction.reply(
+          toEphemeralResponse(`Artist already in Lidarr: ${selected.artistName || query}.`)
+        );
+        return;
+      }
+
+      const created = await lidarr.addArtist({
+        artist: selected.payload,
+        options: lidarr.getDefaults()
+      });
+
+      const title = String(created.artistName || selected.artistName || query).trim();
+      const localArtistId = Number(created.id || 0);
+      const requestId = -Math.max(localArtistId || Date.now(), 1);
+
+      db.upsertRequestEvent({
+        requestId,
+        mediaType: "music",
+        mediaId: localArtistId > 0 ? localArtistId : 0,
+        title,
+        status: 2,
+        statusText: "Added to Lidarr",
+        requestedBy: null
+      });
+
+      await interaction.reply(
+        toEphemeralResponse(`Music request submitted: ${title} (added to Lidarr).`)
+      );
+
+      await announceRequestCreated({
+        title,
+        mediaType: "music",
+        mediaId: localArtistId > 0 ? localArtistId : 0,
+        requestId,
+        requesterDiscordId: interaction.user.id,
+        requesterUsername: interaction.user.username,
+        seasons: [],
+        image: selected.remotePoster || ""
+      });
+
+      return;
+    }
+
+    const mediaId = Number(mediaInput || 0);
 
     const parsedSeason = parseSeasonMode(seasonInput);
 
@@ -1343,10 +1411,27 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       interaction.fields.getTextInputValue(REQUEST_MODAL_SEASON) || ""
     ).trim();
 
-    if (!["movie", "tv"].includes(mediaTypeInput)) {
+    if (!["movie", "tv", "music"].includes(mediaTypeInput)) {
       await interaction.reply(
-        toEphemeralResponse("Media type must be 'movie' or 'tv'.")
+        toEphemeralResponse("Media type must be 'movie', 'tv', or 'music'.")
       );
+      return;
+    }
+
+    if (mediaTypeInput === "music") {
+      const musicQuery = String(mediaIdInput || "").trim();
+      if (!musicQuery) {
+        await interaction.reply(
+          toEphemeralResponse("Provide an artist name, MBID, or MusicBrainz URL for music requests.")
+        );
+        return;
+      }
+
+      await processRequestSubmission(interaction, {
+        mediaType: mediaTypeInput,
+        mediaInput: musicQuery,
+        seasonInput: ""
+      });
       return;
     }
 
@@ -1360,7 +1445,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     await processRequestSubmission(interaction, {
       mediaType: mediaTypeInput,
-      mediaId: parsedMediaId,
+      mediaInput: parsedMediaId,
       seasonInput
     });
   }

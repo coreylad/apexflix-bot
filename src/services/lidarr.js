@@ -159,6 +159,28 @@ function createLidarrClient(config) {
     return Array.isArray(response?.data) ? response.data : [];
   }
 
+  function coerceArrayResponse(value) {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    if (Array.isArray(value?.records)) {
+      return value.records;
+    }
+    return [];
+  }
+
+  async function getArtists() {
+    const client = getClient();
+    const response = await client.get(buildEndpoint("api/v1/artist"));
+    return coerceArrayResponse(response?.data);
+  }
+
+  async function getAlbums() {
+    const client = getClient();
+    const response = await client.get(buildEndpoint("api/v1/album"));
+    return coerceArrayResponse(response?.data);
+  }
+
   return {
     getDefaults,
     getOptions: async () => {
@@ -248,6 +270,25 @@ function createLidarrClient(config) {
 
       const response = await client.post(buildEndpoint("api/v1/artist"), payload);
       return response?.data || {};
+    },
+    getLibraryStats: async () => {
+      const [artists, albums, rootFolders] = await Promise.all([
+        getArtists(),
+        getAlbums().catch(() => []),
+        getRootFolders().catch(() => [])
+      ]);
+
+      const artistCount = artists.length;
+      const monitoredArtistCount = artists.filter((item) => item?.monitored === true).length;
+      const albumCount = albums.length;
+      const rootFolderCount = rootFolders.length;
+
+      return {
+        artistCount,
+        monitoredArtistCount,
+        albumCount,
+        rootFolderCount
+      };
     }
   };
 }

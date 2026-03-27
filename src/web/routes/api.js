@@ -989,10 +989,64 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
 
   router.post("/request", async (req, res, next) => {
     try {
-      const { mediaType, mediaId, discordUserId } = req.body;
+      const { mediaType, mediaId, mediaQuery, discordUserId } = req.body;
+
+      if (mediaType === "music") {
+        const query = String(mediaQuery || mediaId || "").trim();
+        if (!query) {
+          return res.status(400).json({ error: "mediaQuery is required for music requests" });
+        }
+
+        if (!lidarr || typeof lidarr.searchArtists !== "function" || typeof lidarr.addArtist !== "function") {
+          return res.status(503).json({ error: "Lidarr service is unavailable." });
+        }
+
+        const results = await lidarr.searchArtists(query);
+        if (!results.length) {
+          return res.status(404).json({ error: `No Lidarr artist found for: ${query}` });
+        }
+
+        const selected = results.find((item) => !item.inLibrary) || results[0];
+        if (selected.inLibrary) {
+          return res.json({
+            ok: true,
+            requestId: null,
+            status: 4,
+            statusText: "Already in Lidarr",
+            title: selected.artistName || query
+          });
+        }
+
+        const created = await lidarr.addArtist({
+          artist: selected.payload,
+          options: lidarr.getDefaults()
+        });
+
+        const title = String(created.artistName || selected.artistName || query).trim();
+        const localArtistId = Number(created.id || 0);
+        const requestId = -Math.max(localArtistId || Date.now(), 1);
+
+        db.upsertRequestEvent({
+          requestId,
+          mediaType: "music",
+          mediaId: localArtistId > 0 ? localArtistId : 0,
+          title,
+          status: 2,
+          statusText: "Added to Lidarr",
+          requestedBy: null
+        });
+
+        return res.json({
+          ok: true,
+          requestId,
+          status: 2,
+          statusText: "Added to Lidarr",
+          title
+        });
+      }
 
       if (!["movie", "tv"].includes(mediaType)) {
-        return res.status(400).json({ error: "mediaType must be movie or tv" });
+        return res.status(400).json({ error: "mediaType must be movie, tv, or music" });
       }
 
       if (!Number.isInteger(mediaId) || mediaId <= 0) {
@@ -1047,6 +1101,19 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
       return res.json({ ok: true, ...options });
     } catch (error) {
       next(new Error(`Lidarr options failed: ${error.message}`));
+    }
+  });
+
+  router.get("/lidarr/stats", async (req, res, next) => {
+    try {
+      if (!lidarr || typeof lidarr.getLibraryStats !== "function") {
+        return res.status(503).json({ error: "Lidarr service is unavailable." });
+      }
+
+      const stats = await lidarr.getLibraryStats();
+      return res.json({ ok: true, ...stats });
+    } catch (error) {
+      next(new Error(`Lidarr stats failed: ${error.message}`));
     }
   });
 

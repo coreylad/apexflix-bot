@@ -324,6 +324,7 @@ function onTabActivated(id) {
     case "tabRequests":
       loadRequestsTable();
       loadLidarrOptions();
+      loadLidarrLibraryStats();
       break;
     case "tabJellyfin":
       loadJellyfinStats();
@@ -531,21 +532,31 @@ function wireRequestForm() {
     clearMsg("requestMsg");
     const fd = new FormData(form);
     const mediaType = String(fd.get("mediaType") || "movie");
-    const rawId = String(fd.get("mediaId") || "").trim();
+    const rawInput = String(fd.get("mediaId") || "").trim();
     const seasonInput = String(fd.get("season") || "").trim();
 
-    // Extract numeric TMDB ID from URL or plain number
-    const match = rawId.match(/(\d+)\/?$/);
-    const mediaId = match ? Number(match[1]) : NaN;
+    const payload = { mediaType };
 
-    if (!mediaId || !Number.isInteger(mediaId) || mediaId <= 0) {
-      setMsg("requestMsg", "Enter a valid TMDB ID or TMDB URL.", "err");
-      return;
-    }
+    if (mediaType === "music") {
+      if (!rawInput) {
+        setMsg("requestMsg", "Enter an artist name, MBID, or MusicBrainz URL.", "err");
+        return;
+      }
+      payload.mediaQuery = rawInput;
+    } else {
+      // Extract numeric TMDB ID from URL or plain number
+      const match = rawInput.match(/(\d+)\/?$/);
+      const mediaId = match ? Number(match[1]) : NaN;
 
-    const payload = { mediaType, mediaId };
-    if (mediaType === "tv" && seasonInput) {
-      payload.season = seasonInput;
+      if (!mediaId || !Number.isInteger(mediaId) || mediaId <= 0) {
+        setMsg("requestMsg", "Enter a valid TMDB ID or TMDB URL.", "err");
+        return;
+      }
+
+      payload.mediaId = mediaId;
+      if (mediaType === "tv" && seasonInput) {
+        payload.season = seasonInput;
+      }
     }
 
     try {
@@ -557,6 +568,7 @@ function wireRequestForm() {
       setMsg("requestMsg", `Submitted "${data.title || "request"}"  ${data.statusText || "pending"}`, "ok");
       form.reset();
       loadRequestsTable();
+      loadLidarrLibraryStats();
     } catch (err) {
       setMsg("requestMsg", err.message, "err");
     }
@@ -586,6 +598,28 @@ async function loadLidarrOptions() {
     const hint = document.getElementById("lidarrOptionsHint");
     if (hint) hint.textContent = "";
     setMsg("lidarrMsg", err.message, "err");
+  }
+}
+
+async function loadLidarrLibraryStats() {
+  try {
+    const data = await fetchJson("api/lidarr/stats");
+    const map = [
+      ["lidarrArtistsCount", data.artistCount],
+      ["lidarrMonitoredCount", data.monitoredArtistCount],
+      ["lidarrAlbumsCount", data.albumCount],
+      ["lidarrRootFoldersCount", data.rootFolderCount]
+    ];
+
+    for (const [id, value] of map) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value ?? "";
+    }
+  } catch {
+    ["lidarrArtistsCount", "lidarrMonitoredCount", "lidarrAlbumsCount", "lidarrRootFoldersCount"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = "";
+    });
   }
 }
 
@@ -1346,7 +1380,10 @@ function wireAll(user) {
   wireRequestForm();
   wireLidarrForm();
   bindButtonClick("reqRefreshBtn", loadRequestsTable);
-  bindButtonClick("lidarrOptionsRefreshBtn", loadLidarrOptions);
+  bindButtonClick("lidarrOptionsRefreshBtn", async () => {
+    await loadLidarrOptions();
+    await loadLidarrLibraryStats();
+  });
 
   // Jellyfin
   bindButtonClick("jellyRefreshNP", loadJellyfinNowPlaying);

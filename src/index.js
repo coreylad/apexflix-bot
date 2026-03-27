@@ -27,6 +27,7 @@ async function bootstrap() {
     logger,
     db,
     overseerr,
+    lidarr,
     jellyfin
   });
 

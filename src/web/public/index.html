@@ -233,10 +233,11 @@
                   <select name="mediaType">
                     <option value="movie"> Movie</option>
                     <option value="tv"> TV Series</option>
+                    <option value="music"> Music Artist</option>
                   </select>
                 </label>
-                <label>TMDB ID or URL
-                  <input type="text" name="mediaId" placeholder="e.g. 1399 or https://www.themoviedb.org/tv/1399" />
+                <label>Media Input
+                  <input type="text" name="mediaId" placeholder="Movie/TV: TMDB ID or URL. Music: artist name or MBID" />
                 </label>
                 <label>Season (TV only  1, all, latest)
                   <input type="text" name="season" placeholder="Leave blank for movies" />
@@ -270,6 +271,25 @@
                 <div class="card-subtitle">Search for an artist, choose monitoring rules, and send it straight to Lidarr.</div>
               </div>
               <button type="button" class="btn-secondary btn-sm" id="lidarrOptionsRefreshBtn">Refresh Options</button>
+            </div>
+
+            <div class="grid-4" style="margin-bottom:1rem">
+              <div class="stat-card">
+                <div class="stat-label">Artists</div>
+                <div class="stat-value blue" id="lidarrArtistsCount"></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Monitored</div>
+                <div class="stat-value green" id="lidarrMonitoredCount"></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Albums</div>
+                <div class="stat-value accent" id="lidarrAlbumsCount"></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Root Folders</div>
+                <div class="stat-value orange" id="lidarrRootFoldersCount"></div>
+              </div>
             </div>
 
             <div class="grid-2" style="align-items:start">

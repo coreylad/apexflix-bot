@@ -30,7 +30,7 @@ function buildCommands() {
       ),
     new SlashCommandBuilder()
       .setName("request")
-      .setDescription("Open an easy request form for movie or TV media"),
+      .setDescription("Open an easy request form for movie, TV, or music"),
     new SlashCommandBuilder()
       .setName("requesthelp")
       .setDescription("Show how to use the /request command with TV seasons"),

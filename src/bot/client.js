@@ -1488,9 +1488,9 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
 
   async function handleRequestModalSubmit(interaction, mediaType) {
     const mediaIdInput = interaction.fields.getTextInputValue(REQUEST_MODAL_MEDIA_ID);
-    const seasonInput = String(
-      interaction.fields.getTextInputValue(REQUEST_MODAL_SEASON) || ""
-    ).trim();
+    const seasonInput = mediaType === "tv" 
+      ? String(interaction.fields.getTextInputValue(REQUEST_MODAL_SEASON) || "").trim()
+      : "";
 
     if (mediaType === "music") {
       const musicQuery = String(mediaIdInput || "").trim();

@@ -225,25 +225,47 @@ function renderEnvForm(targetId, allowedKeys, values) {
       const fields = keys
         .map((key) => renderEnvField(key, values?.[key] || ""))
         .join("");
-      const lidarrActions =
-        targetId === "envForm" && group.title === "Lidarr"
-          ? `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testLidarrEnvBtn">Test Lidarr Connection</button><div id="testLidarrEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`
-          : "";
-      return `<div class="settings-section"><div class="settings-title">${group.title}</div><div class="settings-grid">${fields}</div>${lidarrActions}</div>`;
+
+      let appActions = "";
+      if (targetId === "envForm" && group.title === "Overseerr") {
+        appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testOverseerrEnvBtn">Test Overseerr Connection</button><div id="testOverseerrEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
+      }
+      if (targetId === "envForm" && group.title === "Jellyfin") {
+        appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testJellyfinEnvBtn">Test Jellyfin Connection</button><div id="testJellyfinEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
+      }
+      if (targetId === "envForm" && group.title === "Lidarr") {
+        appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testLidarrEnvBtn">Test Lidarr Connection</button><div id="testLidarrEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
+      }
+
+      return `<div class="settings-section"><div class="settings-title">${group.title}</div><div class="settings-grid">${fields}</div>${appActions}</div>`;
     })
     .join("");
 }
 
-function setLidarrTestButtonState({ busy = false, text = "", type = "info" } = {}) {
-  const button = document.getElementById("testLidarrEnvBtn");
-  const status = document.getElementById("testLidarrEnvStatus");
+function setAppTestButtonState(app, { busy = false, text = "", type = "info" } = {}) {
+  const key = String(app || "").toLowerCase();
+  const map = {
+    overseerr: { buttonId: "testOverseerrEnvBtn", statusId: "testOverseerrEnvStatus", label: "Test Overseerr Connection" },
+    jellyfin: { buttonId: "testJellyfinEnvBtn", statusId: "testJellyfinEnvStatus", label: "Test Jellyfin Connection" },
+    lidarr: { buttonId: "testLidarrEnvBtn", statusId: "testLidarrEnvStatus", label: "Test Lidarr Connection" }
+  };
+
+  const entry = map[key];
+  if (!entry) return;
+
+  const button = document.getElementById(entry.buttonId);
+  const status = document.getElementById(entry.statusId);
   if (button) {
     button.disabled = busy;
-    button.textContent = busy ? "Testing..." : "Test Lidarr Connection";
+    button.textContent = busy ? "Testing..." : entry.label;
   }
   if (status) {
-    setMsg("testLidarrEnvStatus", text, type);
+    setMsg(entry.statusId, text, type);
   }
+}
+
+function setLidarrTestButtonState({ busy = false, text = "", type = "info" } = {}) {
+  setAppTestButtonState("lidarr", { busy, text, type });
 }
 
 function collectFormValues(formId) {
@@ -1022,6 +1044,36 @@ async function testLidarrEnvConnection() {
   }
 }
 
+async function testOverseerrEnvConnection() {
+  const values = collectFormValues("envForm");
+  setAppTestButtonState("overseerr", { busy: true, text: "Testing Overseerr connection...", type: "info" });
+  try {
+    const data = await fetchJson("api/admin/overseerr/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values })
+    });
+    setAppTestButtonState("overseerr", { busy: false, text: data.message || "Connected to Overseerr.", type: "ok" });
+  } catch (err) {
+    setAppTestButtonState("overseerr", { busy: false, text: err.message, type: "err" });
+  }
+}
+
+async function testJellyfinEnvConnection() {
+  const values = collectFormValues("envForm");
+  setAppTestButtonState("jellyfin", { busy: true, text: "Testing Jellyfin connection...", type: "info" });
+  try {
+    const data = await fetchJson("api/admin/jellyfin/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values })
+    });
+    setAppTestButtonState("jellyfin", { busy: false, text: data.message || "Connected to Jellyfin.", type: "ok" });
+  } catch (err) {
+    setAppTestButtonState("jellyfin", { busy: false, text: err.message, type: "err" });
+  }
+}
+
 /*  system  */
 async function loadHealth() {
   const box = document.getElementById("healthBox");
@@ -1356,10 +1408,20 @@ function wireAll(user) {
   // Environment
   document.getElementById("saveEnvBtn")?.addEventListener("click", saveEnvSettings);
   document.getElementById("envForm")?.addEventListener("click", (e) => {
-    const button = e.target.closest("#testLidarrEnvBtn");
+    const button = e.target.closest("button[id]");
     if (!button) return;
     e.preventDefault();
-    testLidarrEnvConnection();
+    if (button.id === "testOverseerrEnvBtn") {
+      testOverseerrEnvConnection();
+      return;
+    }
+    if (button.id === "testJellyfinEnvBtn") {
+      testJellyfinEnvConnection();
+      return;
+    }
+    if (button.id === "testLidarrEnvBtn") {
+      testLidarrEnvConnection();
+    }
   });
 
   // System

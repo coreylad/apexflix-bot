@@ -3,6 +3,8 @@ const fs = require("fs");
 const path = require("path");
 const { generateSessionToken, verifyPassword, hashPassword } = require("../../services/security");
 const { createLidarrClient } = require("../../services/lidarr");
+const { createOverseerrClient } = require("../../services/overseerr");
+const { createJellyfinClient } = require("../../services/jellyfin");
 
 const DEFAULT_BOT_CONFIG = {
   requestsChannelId: "",
@@ -182,6 +184,29 @@ function requireAuth(db) {
 function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, bot, logger }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
+
+  function buildOverseerrConfigFromValues(values = {}) {
+    return {
+      url: firstNonEmpty([values.OVERSEERR_URL, values.OVERSEERR_BASE_URL], config?.overseerr?.url || "").replace(/\/$/, ""),
+      apiKey: firstNonEmpty([values.OVERSEERR_API_KEY], config?.overseerr?.apiKey || ""),
+      defaultUserId: asOptionalNumber(values.OVERSEERR_DEFAULT_USER_ID, config?.overseerr?.defaultUserId || 1),
+      allowInsecureTls: asOptionalBoolean(values.OVERSEERR_ALLOW_INSECURE_TLS, config?.overseerr?.allowInsecureTls || false)
+    };
+  }
+
+  function buildJellyfinConfigFromValues(values = {}) {
+    return {
+      url: firstNonEmpty([values.JELLYFIN_URL, values.JELLYFIN_BASE_URL], config?.jellyfin?.url || "").replace(/\/$/, ""),
+      apiKey: firstNonEmpty([values.JELLYFIN_API_KEY], config?.jellyfin?.apiKey || ""),
+      userId: firstNonEmpty([values.JELLYFIN_USER_ID], config?.jellyfin?.userId || ""),
+      username: firstNonEmpty([values.JELLYFIN_USERNAME], config?.jellyfin?.username || ""),
+      clientName: firstNonEmpty([values.JELLYFIN_CLIENT_NAME], config?.jellyfin?.clientName || "ApexFlix"),
+      deviceName: firstNonEmpty([values.JELLYFIN_DEVICE_NAME], config?.jellyfin?.deviceName || "ApexFlix Bot"),
+      deviceId: firstNonEmpty([values.JELLYFIN_DEVICE_ID], config?.jellyfin?.deviceId || "apexflix-bot"),
+      clientVersion: firstNonEmpty([values.JELLYFIN_CLIENT_VERSION], config?.jellyfin?.clientVersion || "1.0.0"),
+      allowInsecureTls: asOptionalBoolean(values.JELLYFIN_ALLOW_INSECURE_TLS, config?.jellyfin?.allowInsecureTls || false)
+    };
+  }
 
   function buildLidarrConfigFromValues(values = {}) {
     return {
@@ -733,6 +758,55 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
         "Saved to .env and applied to runtime. Discord token/client/guild changes require app restart to reconnect bot.",
       values: next
     });
+  });
+
+  router.post("/admin/overseerr/test", authMiddleware, async (req, res, next) => {
+    try {
+      const values = req.body?.values;
+      if (!values || typeof values !== "object") {
+        return res.status(400).json({ error: "values object is required" });
+      }
+
+      const testClient = createOverseerrClient(buildOverseerrConfigFromValues(values));
+      const recent = await testClient.getRecentRequests(1);
+      return res.json({
+        ok: true,
+        message: "Connected to Overseerr.",
+        details: {
+          recentRequestsChecked: Array.isArray(recent) ? recent.length : 0
+        }
+      });
+    } catch (error) {
+      next(new Error(`Overseerr test failed: ${error.message}`));
+    }
+  });
+
+  router.post("/admin/jellyfin/test", authMiddleware, async (req, res, next) => {
+    try {
+      const values = req.body?.values;
+      if (!values || typeof values !== "object") {
+        return res.status(400).json({ error: "values object is required" });
+      }
+
+      const testClient = createJellyfinClient(buildJellyfinConfigFromValues(values));
+      const [stats, sections] = await Promise.all([
+        testClient.getUsageStats(),
+        testClient.getLibrarySections()
+      ]);
+
+      return res.json({
+        ok: true,
+        message: "Connected to Jellyfin.",
+        details: {
+          activeSessions: Number(stats?.activeSessions || 0),
+          movieCount: Number(stats?.movieCount || 0),
+          seriesCount: Number(stats?.seriesCount || 0),
+          librarySections: Array.isArray(sections) ? sections.length : 0
+        }
+      });
+    } catch (error) {
+      next(new Error(`Jellyfin test failed: ${error.message}`));
+    }
   });
 
   router.post("/admin/lidarr/test", authMiddleware, async (req, res, next) => {

@@ -1057,7 +1057,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
 
         const title = String(created.artistName || selected.artistName || query).trim();
         const localArtistId = Number(created.id || 0);
-        const requestId = -Math.max(localArtistId || Date.now(), 1);
+        const requestId = localArtistId > 0 ? `LIDARR-${localArtistId}` : `LIDARR-${Date.now()}`;
 
         db.upsertRequestEvent({
           requestId,
@@ -1076,7 +1076,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
               artistId: localArtistId > 0 ? localArtistId : 0,
               genres: created.genres || selected.genres || [],
               status: created.status || "Added to Lidarr",
-              requestId,
+              requestId: requestId,
               requesterDiscordId: "",
               requesterUsername: "Web User",
               image: ""
@@ -1228,7 +1228,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
       const created = await lidarr.addArtist({ artist, options });
       const localArtistId = Number(created.id || 0);
       const title = String(created.artistName || artist.artistName || artist.sortName || "Unknown artist").trim();
-      const requestId = -Math.max(localArtistId || Date.now(), 1);
+      const requestId = localArtistId > 0 ? `LIDARR-${localArtistId}` : `LIDARR-${Date.now()}`;
 
       db.upsertRequestEvent({
         requestId,
@@ -1246,7 +1246,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
           artistId: localArtistId > 0 ? localArtistId : 0,
           genres: created.genres || artist.genres || [],
           status: created.status || "Added to Lidarr",
-          requestId,
+          requestId: requestId,
           requesterDiscordId: "",
           requesterUsername: req.auth?.user?.username || "Web Admin",
           image: ""

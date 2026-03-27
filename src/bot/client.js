@@ -345,7 +345,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         { name: "Type", value: "music", inline: true },
         { name: "Artist ID", value: String(artistId || "unknown"), inline: true },
         { name: "Status", value: String(status || "Added to Lidarr"), inline: true },
-        { name: "Request ID", value: String(requestId || "unknown"), inline: true },
+        { name: "Reference", value: String(requestId || "unknown"), inline: true },
         { name: "Requested By", value: String(requesterUsername || "Unknown"), inline: true },
         { name: "Genres", value: genreList.length ? genreList.slice(0, 6).join(", ") : "Unknown", inline: false }
       ]
@@ -1296,7 +1296,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
 
       const title = String(created.artistName || selected.artistName || query).trim();
       const localArtistId = Number(created.id || 0);
-      const requestId = -Math.max(localArtistId || Date.now(), 1);
+      const requestId = localArtistId > 0 ? `LIDARR-${localArtistId}` : `LIDARR-${Date.now()}`;
 
       db.upsertRequestEvent({
         requestId,
@@ -1328,7 +1328,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         artistId: localArtistId > 0 ? localArtistId : 0,
         genres: created.genres || selected.genres || [],
         status: created.status || "Added to Lidarr",
-        requestId,
+        requestId: requestId,
         requesterDiscordId: interaction.user.id,
         requesterUsername: interaction.user.username,
         image: ""

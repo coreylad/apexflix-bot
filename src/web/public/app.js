@@ -642,6 +642,20 @@ async function saveChannels() {
   }
 }
 
+async function sendManualChannelTest(target) {
+  try {
+    setMsg("channelsMsg", `Sending test to ${target}...`, "info");
+    const data = await fetchJson("api/admin/notifications/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target })
+    });
+    setMsg("channelsMsg", data.message || `Test sent to ${target}.`, "ok");
+  } catch (err) {
+    setMsg("channelsMsg", err.message, "err");
+  }
+}
+
 /*  environment  */
 async function loadEnvSettings() {
   try {
@@ -924,6 +938,9 @@ function wireAll(user) {
 
   // Channels
   document.getElementById("saveChannelsBtn")?.addEventListener("click", saveChannels);
+  document.querySelectorAll(".test-channel-btn[data-test-target]").forEach((btn) => {
+    btn.addEventListener("click", () => sendManualChannelTest(btn.dataset.testTarget));
+  });
 
   // Environment
   document.getElementById("saveEnvBtn")?.addEventListener("click", saveEnvSettings);

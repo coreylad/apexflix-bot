@@ -583,6 +583,27 @@
           <div class="btn-row">
             <button type="button" class="btn-primary" id="saveChannelsBtn">Save Channels &amp; Roles</button>
           </div>
+          <div class="settings-section" style="margin-top:1rem">
+            <div class="settings-title">Manual Channel Tests</div>
+            <p class="text-sm muted" style="margin-bottom:0.6rem">Send a test message to each configured channel target.</p>
+            <div class="btn-row" style="flex-wrap:wrap">
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="requestsChannelId">Test Requests</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="uploadsChannelId">Test Uploads</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="updatesChannelId">Test Updates</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="newsChannelId">Test News</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="reportsChannelId">Test Reports</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="jellyfinNowPlayingChannelId">Test Jellyfin NP</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="jellyfinStatsChannelId">Test Jellyfin Stats</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="newMoviesChannelId">Test New Movies</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="newShowsChannelId">Test New TV</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="newEpisodesChannelId">Test New Episodes</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="generalChannelId">Test General</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="welcomeChannelId">Test Welcome</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="suggestionsChannelId">Test Suggestions</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="cuttingBoardChannelId">Test Cutting Board</button>
+              <button type="button" class="btn-secondary btn-sm test-channel-btn" data-test-target="botTestingChannelId">Test Bot Testing</button>
+            </div>
+          </div>
           <div id="channelsMsg" class="msg"></div>
         </div>
 

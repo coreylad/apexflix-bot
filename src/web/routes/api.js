@@ -424,6 +424,32 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
     }
   });
 
+  router.post("/admin/notifications/test", authMiddleware, async (req, res, next) => {
+    try {
+      const target = String(req.body?.target || "").trim();
+      if (!target) {
+        return res.status(400).json({ error: "target is required" });
+      }
+
+      if (!bot || typeof bot.sendManualChannelTest !== "function") {
+        return res.status(503).json({ error: "Discord bot is not ready for manual test notifications." });
+      }
+
+      const result = await bot.sendManualChannelTest({ target });
+      if (!result?.ok) {
+        return res.status(400).json({ error: result?.message || "Manual test send failed." });
+      }
+
+      return res.json({
+        ok: true,
+        message: `Manual test sent to ${result.channelKey}.`,
+        details: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/admin/systemd/deploy", authMiddleware, async (req, res, next) => {
     try {
       if (process.platform !== "linux") {

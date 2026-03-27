@@ -391,6 +391,109 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       });
       await sendToChannel(cfg.updatesChannelId, payload);
     }
+
+    if (isAvailable) {
+      const normalizedMediaType = String(mediaType || "").toLowerCase();
+
+      if (normalizedMediaType === "movie" && cfg.newMoviesChannelId) {
+        const payload = buildAnnouncementPayload({
+          title: "New Movie Added",
+          description: `${title} is now available.`,
+          color: 0x2ecc71,
+          imageUrl: posterUrl,
+          fields: [
+            { name: "Type", value: "movie", inline: true },
+            { name: "Request ID", value: String(requestId || "unknown"), inline: true }
+          ]
+        });
+        await sendToChannel(cfg.newMoviesChannelId, payload);
+      }
+
+      if (normalizedMediaType === "tv" && cfg.newShowsChannelId) {
+        const payload = buildAnnouncementPayload({
+          title: "New TV Show Added",
+          description: `${title} is now available.`,
+          color: 0x4cc9f0,
+          imageUrl: posterUrl,
+          fields: [
+            { name: "Type", value: "tv", inline: true },
+            { name: "Request ID", value: String(requestId || "unknown"), inline: true }
+          ]
+        });
+        await sendToChannel(cfg.newShowsChannelId, payload);
+      }
+
+      if (normalizedMediaType === "tv" && cfg.newEpisodesChannelId) {
+        const seasonLabels = Array.isArray(seasons)
+          ? seasons
+              .map((s) => {
+                const n = Number(s?.seasonNumber ?? s);
+                return Number.isInteger(n) && n > 0 ? `S${n}` : "";
+              })
+              .filter(Boolean)
+          : [];
+
+        if (seasonLabels.length > 0) {
+          const payload = buildAnnouncementPayload({
+            title: "New Episode Update",
+            description: `${title} now has available episode content (${seasonLabels.join(", ")}).`,
+            color: 0x39b96e,
+            imageUrl: posterUrl,
+            fields: [
+              { name: "Seasons", value: seasonLabels.join(", "), inline: true },
+              { name: "Request ID", value: String(requestId || "unknown"), inline: true }
+            ]
+          });
+          await sendToChannel(cfg.newEpisodesChannelId, payload);
+        }
+      }
+    }
+  }
+
+  async function sendManualChannelTest({ target }) {
+    if (!online) {
+      return { ok: false, message: "Discord bot is not online." };
+    }
+
+    const cfg = getBotConfig();
+    const normalizedTarget = String(target || "").trim();
+    const aliasMap = {
+      requests: "requestsChannelId",
+      uploads: "uploadsChannelId",
+      updates: "updatesChannelId",
+      news: "newsChannelId",
+      reports: "reportsChannelId",
+      jellyfinNowPlaying: "jellyfinNowPlayingChannelId",
+      jellyfinStats: "jellyfinStatsChannelId",
+      newMovies: "newMoviesChannelId",
+      newShows: "newShowsChannelId",
+      newEpisodes: "newEpisodesChannelId",
+      general: "generalChannelId",
+      welcome: "welcomeChannelId",
+      suggestions: "suggestionsChannelId",
+      cuttingBoard: "cuttingBoardChannelId",
+      botTesting: "botTestingChannelId"
+    };
+
+    const channelKey = aliasMap[normalizedTarget] || normalizedTarget;
+    const channelId = cfg[channelKey];
+
+    if (!channelId) {
+      return { ok: false, message: `Channel is not configured for ${channelKey}.` };
+    }
+
+    const payload = buildAnnouncementPayload({
+      title: "Manual Channel Test",
+      description: `ApexFlix test message for ${channelKey}.`,
+      color: 0x6ae3b9,
+      fields: [
+        { name: "Target", value: channelKey, inline: true },
+        { name: "Sent At", value: new Date().toISOString(), inline: true }
+      ]
+    });
+
+    await sendToChannel(channelId, payload);
+    return { ok: true, channelKey, channelId };
   }
 
   function describeCommandError(error) {
@@ -1535,6 +1638,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     },
     notifyDiscordUser,
     announceRequestStatusChange,
+    sendManualChannelTest,
     sendDailyNewsReport,
     publishJellyfinNowPlayingSnapshot,
     publishJellyfinStatsSnapshot,

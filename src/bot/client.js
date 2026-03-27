@@ -122,6 +122,23 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     };
   }
 
+  function resolvePosterUrl(image) {
+    const raw = String(image || "").trim();
+    if (!raw) {
+      return "";
+    }
+
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
+
+    if (raw.startsWith("/")) {
+      return `https://image.tmdb.org/t/p/w500${raw}`;
+    }
+
+    return `https://image.tmdb.org/t/p/w500/${raw}`;
+  }
+
   async function sendToChannel(channelId, payload) {
     if (!online || !channelId) {
       return;
@@ -139,7 +156,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     }
   }
 
-  function buildAnnouncementPayload({ title, description, color, fields, mention }) {
+  function buildAnnouncementPayload({ title, description, color, fields, mention, imageUrl }) {
     const cfg = getBotConfig();
     if (!cfg.useRichEmbeds) {
       const flat = [title, description]
@@ -159,6 +176,10 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     if (fields?.length) {
       embed.addFields(fields);
+    }
+
+    if (imageUrl) {
+      embed.setThumbnail(imageUrl);
     }
 
     return {
@@ -188,12 +209,13 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         ? `<@${requesterDiscordId}>`
         : "";
 
+    const posterUrl = resolvePosterUrl(image);
     const templateContext = buildTemplateContext({
       notificationType: "MEDIA_PENDING",
       event: "Request Pending Approval",
       subject: title,
       message: `${title} was requested and sent to Overseerr.`,
-      image,
+      image: posterUrl || image || "",
       mediaType,
       mediaTmdbId: mediaId,
       mediaStatus: "PENDING",
@@ -210,6 +232,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       description: rendered,
       color: 0x4cc9f0,
       mention,
+      imageUrl: posterUrl,
       fields: [
         { name: "Type", value: mediaType || "unknown", inline: true },
         { name: "Request ID", value: String(requestId || "unknown"), inline: true }
@@ -236,12 +259,13 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     const mention = cfg.mentionRequesterInChannel && requesterDiscordId ? `<@${requesterDiscordId}>` : "";
 
+    const posterUrl = resolvePosterUrl(image);
     const templateContext = buildTemplateContext({
       notificationType: status === 4 ? "MEDIA_AVAILABLE" : "MEDIA_STATUS_CHANGED",
       event: status === 4 ? "Request Available" : "Request Status Changed",
       subject: title,
       message: `${title} changed status to ${statusText}.`,
-      image,
+      image: posterUrl || image || "",
       mediaType,
       mediaTmdbId: mediaId,
       mediaStatus: statusText,
@@ -258,6 +282,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         description: rendered,
         color: 0x2ecc71,
         mention,
+        imageUrl: posterUrl,
         fields: [
           { name: "Request ID", value: String(requestId || "unknown"), inline: true },
           { name: "Status", value: statusText || "Available", inline: true }
@@ -273,6 +298,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         description: rendered,
         color: 0xf9c74f,
         mention,
+        imageUrl: posterUrl,
         fields: [
           { name: "Request ID", value: String(requestId || "unknown"), inline: true },
           { name: "Status", value: statusText || "Unknown", inline: true }

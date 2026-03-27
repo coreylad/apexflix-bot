@@ -275,25 +275,32 @@ function createOverseerrClient(config) {
     return "";
   }
 
-  function summarizeDownloadStatus(entries) {
+  function formatEpisodeTag(entry) {
+    const season = Number(entry?.episode?.seasonNumber);
+    const episode = Number(entry?.episode?.episodeNumber);
+    if (Number.isInteger(season) && Number.isInteger(episode) && season > 0 && episode > 0) {
+      return `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
+    }
+
+    const absolute = Number(entry?.episode?.absoluteEpisodeNumber);
+    if (Number.isInteger(absolute) && absolute > 0) {
+      return `Episode ${absolute}`;
+    }
+
+    return "";
+  }
+
+  function summarizeDownloadStatus(entries, fallbackTitle = "") {
     const rows = coerceArray(entries).slice(0, 2);
     if (rows.length === 0) {
       return "";
     }
 
+    const baseTitle = firstNonEmpty([fallbackTitle], "Item");
     const chunks = rows
       .map((entry) => {
-        const label = firstNonEmpty(
-          [
-            entry?.title,
-            entry?.name,
-            entry?.episode?.title,
-            entry?.releaseTitle,
-            entry?.state,
-            entry?.status
-          ],
-          "Item"
-        );
+        const episodeTag = formatEpisodeTag(entry);
+        const label = episodeTag ? `${baseTitle} ${episodeTag}` : baseTitle;
         const progress = formatProgressValue(entry);
         const eta = formatEtaValue(entry);
         const state = firstNonEmpty([entry?.state, entry?.status], "");
@@ -324,8 +331,18 @@ function createOverseerrClient(config) {
   function resolveStatusSnapshot(item) {
     const status = resolveEffectiveStatus(item);
     const base = STATUS_TEXT[status] || `Unknown (${status})`;
+    const canonicalTitle = firstNonEmpty(
+      [
+        item?.media?.title,
+        item?.media?.name,
+        item?.subject,
+        item?.title
+      ],
+      "Item"
+    );
     const downloadSummary = summarizeDownloadStatus(
-      item?.media?.downloadStatus || item?.media?.downloadStatus4k || item?.downloadStatus
+      item?.media?.downloadStatus || item?.media?.downloadStatus4k || item?.downloadStatus,
+      canonicalTitle
     );
 
     if (downloadSummary && status === 5) {

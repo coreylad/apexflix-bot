@@ -758,7 +758,8 @@ function startLogTail() {
     const es = new EventSource("/api/admin/logs/stream");
     logEventSource = es;
     document.getElementById("logsTailToggleBtn")?.classList.add("active");
-    document.getElementById("logsTailToggleBtn")?.textContent = "Stop Tail";
+    const tailBtn = document.getElementById("logsTailToggleBtn");
+    if (tailBtn) tailBtn.textContent = "Stop Tail";
 
     es.onmessage = (ev) => {
       try {
@@ -798,7 +799,8 @@ function stopLogTail() {
   } catch (e) {}
   logEventSource = null;
   document.getElementById("logsTailToggleBtn")?.classList.remove("active");
-  document.getElementById("logsTailToggleBtn")?.textContent = "Start Tail";
+  const tailBtn = document.getElementById("logsTailToggleBtn");
+  if (tailBtn) tailBtn.textContent = "Start Tail";
 }
 
 function toggleLogTail() {

@@ -30,29 +30,7 @@ function buildCommands() {
       ),
     new SlashCommandBuilder()
       .setName("request")
-      .setDescription("Request media by type, TMDB id, and TV season")
-      .addIntegerOption((option) =>
-        option
-          .setName("media_id")
-          .setDescription("TMDB media id from /search results")
-          .setRequired(true)
-      )
-      .addStringOption((option) =>
-        option
-          .setName("media_type")
-          .setDescription("Movie or TV")
-          .addChoices(
-            { name: "Movie", value: "movie" },
-            { name: "TV", value: "tv" }
-          )
-          .setRequired(true)
-      )
-      .addStringOption((option) =>
-        option
-          .setName("season")
-          .setDescription("TV only: 1, all, latest, season1, or season[1]")
-          .setRequired(false)
-      ),
+      .setDescription("Open an easy request form for movie or TV media"),
     new SlashCommandBuilder()
       .setName("requesthelp")
       .setDescription("Show how to use the /request command with TV seasons"),

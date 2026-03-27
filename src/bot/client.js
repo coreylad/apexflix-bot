@@ -1,12 +1,21 @@
 const {
+  ActionRowBuilder,
   Client,
   EmbedBuilder,
   GatewayIntentBits,
   MessageFlags,
+  ModalBuilder,
   REST,
-  Routes
+  Routes,
+  TextInputBuilder,
+  TextInputStyle
 } = require("discord.js");
 const { buildCommands } = require("./commands");
+
+const REQUEST_MODAL_ID = "apexflix-request-modal";
+const REQUEST_MODAL_MEDIA_TYPE = "media_type";
+const REQUEST_MODAL_MEDIA_ID = "media_id";
+const REQUEST_MODAL_SEASON = "season";
 
 function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
   const DEFAULT_BOT_CONFIG = {
@@ -399,6 +408,75 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     return { mode: "invalid", input: rawValue };
   }
 
+  function parseMediaIdInput(rawValue) {
+    const raw = String(rawValue || "").trim();
+    if (!raw) {
+      return 0;
+    }
+
+    if (/^\d+$/.test(raw)) {
+      const parsed = Number(raw);
+      return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+    }
+
+    try {
+      const parsedUrl = new URL(raw);
+      const directMatch = parsedUrl.pathname.match(/\/(movie|tv)\/(\d+)/i);
+      if (directMatch?.[2]) {
+        const id = Number(directMatch[2]);
+        return Number.isInteger(id) && id > 0 ? id : 0;
+      }
+    } catch (error) {
+      // Not a URL; continue with fallback pattern check.
+    }
+
+    const fallback = raw.match(/(?:^|\D)(\d{2,})(?:\D|$)/);
+    if (fallback?.[1]) {
+      const id = Number(fallback[1]);
+      return Number.isInteger(id) && id > 0 ? id : 0;
+    }
+
+    return 0;
+  }
+
+  function buildRequestModal() {
+    const modal = new ModalBuilder()
+      .setCustomId(REQUEST_MODAL_ID)
+      .setTitle("Request Media");
+
+    const mediaType = new TextInputBuilder()
+      .setCustomId(REQUEST_MODAL_MEDIA_TYPE)
+      .setLabel("Media Type (movie or tv)")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder("movie")
+      .setMaxLength(10);
+
+    const mediaId = new TextInputBuilder()
+      .setCustomId(REQUEST_MODAL_MEDIA_ID)
+      .setLabel("TMDB ID or TMDB URL")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder("1399 or https://www.themoviedb.org/tv/1399")
+      .setMaxLength(200);
+
+    const season = new TextInputBuilder()
+      .setCustomId(REQUEST_MODAL_SEASON)
+      .setLabel("Season (TV only: 1, all, latest)")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setPlaceholder("1")
+      .setMaxLength(30);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(mediaType),
+      new ActionRowBuilder().addComponents(mediaId),
+      new ActionRowBuilder().addComponents(season)
+    );
+
+    return modal;
+  }
+
   function firstNonEmpty(values, fallback = "") {
     for (const value of values) {
       if (value === undefined || value === null) {
@@ -749,7 +827,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     await interaction.reply(toEphemeralResponse(formatSearchResults(results)));
   }
 
-  async function handleRequest(interaction) {
+  async function processRequestSubmission(interaction, { mediaType, mediaId, seasonInput }) {
     const botConfig = getBotConfig();
     if (
       botConfig.enforceRequestChannel &&
@@ -762,9 +840,6 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       return;
     }
 
-    const mediaId = interaction.options.getInteger("media_id", true);
-    const mediaType = interaction.options.getString("media_type", true);
-    const seasonInput = interaction.options.getString("season");
     const parsedSeason = parseSeasonMode(seasonInput);
 
     if (mediaType === "tv" && parsedSeason.mode === "none") {
@@ -883,6 +958,43 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     });
   }
 
+  async function handleRequest(interaction) {
+    await interaction.showModal(buildRequestModal());
+  }
+
+  async function handleRequestModalSubmit(interaction) {
+    const mediaTypeInput = String(
+      interaction.fields.getTextInputValue(REQUEST_MODAL_MEDIA_TYPE) || ""
+    )
+      .trim()
+      .toLowerCase();
+    const mediaIdInput = interaction.fields.getTextInputValue(REQUEST_MODAL_MEDIA_ID);
+    const seasonInput = String(
+      interaction.fields.getTextInputValue(REQUEST_MODAL_SEASON) || ""
+    ).trim();
+
+    if (!["movie", "tv"].includes(mediaTypeInput)) {
+      await interaction.reply(
+        toEphemeralResponse("Media type must be 'movie' or 'tv'.")
+      );
+      return;
+    }
+
+    const parsedMediaId = parseMediaIdInput(mediaIdInput);
+    if (!parsedMediaId) {
+      await interaction.reply(
+        toEphemeralResponse("Could not parse a TMDB ID. Use a numeric ID or TMDB movie/tv URL.")
+      );
+      return;
+    }
+
+    await processRequestSubmission(interaction, {
+      mediaType: mediaTypeInput,
+      mediaId: parsedMediaId,
+      seasonInput
+    });
+  }
+
   async function handleStatus(interaction) {
     const requestId = interaction.options.getInteger("request_id", true);
     const request = await overseerr.getRequestById(requestId);
@@ -934,6 +1046,26 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
   });
 
   client.on("interactionCreate", async (interaction) => {
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId === REQUEST_MODAL_ID) {
+        try {
+          await handleRequestModalSubmit(interaction);
+        } catch (error) {
+          const detail = describeCommandError(error);
+          logger.error(`Request modal handling error: ${detail}`);
+          const response = toEphemeralResponse(`Request failed: ${detail}`);
+
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(response);
+          } else {
+            await interaction.reply(response);
+          }
+        }
+      }
+
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) {
       return;
     }

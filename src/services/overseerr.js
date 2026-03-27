@@ -25,14 +25,30 @@ function createOverseerrClient(config) {
   }
 
   function withQuery(pathname, params) {
-    const url = new URL(buildEndpoint(pathname));
+    const base = buildEndpoint(pathname);
+    const pairs = [];
+
     for (const [key, value] of Object.entries(params || {})) {
       if (value === undefined || value === null || value === "") {
         continue;
       }
-      url.searchParams.set(key, String(value));
+
+      const encodedKey = encodeURIComponent(String(key));
+      const encodedValue = encodeURIComponent(String(value));
+      pairs.push(`${encodedKey}=${encodedValue}`);
     }
-    return url.toString();
+
+    if (pairs.length === 0) {
+      return base;
+    }
+
+    return `${base}?${pairs.join("&")}`;
+  }
+
+  function isEncodingError(error) {
+    const status = error?.response?.status;
+    const message = String(error?.response?.data?.message || error?.message || "").toLowerCase();
+    return status === 400 && message.includes("must be url encoded");
   }
 
   function ensureConfigured() {
@@ -86,11 +102,27 @@ function createOverseerrClient(config) {
     getRequestStatusText: (status) => REQUEST_STATUS[status] || `Unknown (${status})`,
     searchMedia: async (query, mediaType = "all") => {
       const client = getClient();
-      const response = await client.get(
-        withQuery("api/v1/search", {
-          query
-        })
-      );
+      const rawQuery = String(query || "").trim();
+      let response;
+
+      try {
+        response = await client.get(
+          withQuery("api/v1/search", {
+            query: rawQuery
+          })
+        );
+      } catch (error) {
+        if (!isEncodingError(error)) {
+          throw error;
+        }
+
+        // Some reverse proxies decode query values before forwarding; retry with double-encoding.
+        response = await client.get(
+          withQuery("api/v1/search", {
+            query: encodeURIComponent(rawQuery)
+          })
+        );
+      }
 
       const all = response.data?.results || [];
       const filtered =

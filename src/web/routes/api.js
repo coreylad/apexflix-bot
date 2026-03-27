@@ -166,6 +166,31 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
   const router = express.Router();
   const authMiddleware = requireAuth(db);
 
+  function resolveFfmpegLogDir() {
+    const raw = String(config?.jellyfin?.ffmpegLogDir || "").trim() || "/var/log/jellyfin";
+    return path.resolve(raw);
+  }
+
+  function safeResolveLogFile(baseDir, fileName) {
+    const cleaned = path.basename(String(fileName || "").trim());
+    if (!cleaned) {
+      return "";
+    }
+
+    const resolved = path.resolve(baseDir, cleaned);
+    if (!resolved.startsWith(baseDir + path.sep) && resolved !== path.join(baseDir, cleaned)) {
+      return "";
+    }
+
+    return resolved;
+  }
+
+  function readTailLines(filePath, maxLines = 500) {
+    const raw = fs.readFileSync(filePath, "utf8");
+    const lines = raw.split(/\r?\n/);
+    return lines.slice(-Math.max(1, maxLines)).join("\n");
+  }
+
   function sanitizeServiceName(value) {
     const raw = String(value || "apexflix").trim();
     return /^[a-zA-Z0-9_.@-]+$/.test(raw) ? raw : "";
@@ -418,6 +443,70 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
         ok: true,
         message: `Jellyfin stats snapshot sent to channel ${result.channelId}.`,
         details: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/jellyfin/ffmpeg/files", authMiddleware, (req, res, next) => {
+    try {
+      const dir = resolveFfmpegLogDir();
+      if (!fs.existsSync(dir)) {
+        return res.status(404).json({
+          error: `FFmpeg log directory not found: ${dir}`,
+          directory: dir,
+          files: []
+        });
+      }
+
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const files = entries
+        .filter((e) => e.isFile())
+        .map((e) => {
+          const fullPath = path.join(dir, e.name);
+          const stat = fs.statSync(fullPath);
+          return {
+            name: e.name,
+            size: stat.size,
+            mtime: stat.mtime.toISOString()
+          };
+        })
+        .filter((f) => /(ffmpeg|transcode|jellyfin)/i.test(f.name))
+        .sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime())
+        .slice(0, 200);
+
+      return res.json({ ok: true, directory: dir, files });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/jellyfin/ffmpeg/read", authMiddleware, (req, res, next) => {
+    try {
+      const dir = resolveFfmpegLogDir();
+      const file = String(req.query.file || "").trim();
+      const lines = Math.min(Math.max(Number(req.query.lines) || 400, 20), 5000);
+
+      if (!file) {
+        return res.status(400).json({ error: "file query is required" });
+      }
+
+      const filePath = safeResolveLogFile(dir, file);
+      if (!filePath) {
+        return res.status(400).json({ error: "Invalid file name." });
+      }
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: `Log file not found: ${file}` });
+      }
+
+      const content = readTailLines(filePath, lines);
+      return res.json({
+        ok: true,
+        directory: dir,
+        file,
+        content
       });
     } catch (error) {
       next(error);

@@ -102,7 +102,8 @@ function renderEnvForm(targetId, allowedKeys, values) {
         "JELLYFIN_DEVICE_NAME",
         "JELLYFIN_DEVICE_ID",
         "JELLYFIN_CLIENT_VERSION",
-        "JELLYFIN_ALLOW_INSECURE_TLS"
+        "JELLYFIN_ALLOW_INSECURE_TLS",
+        "JELLYFIN_FFMPEG_LOG_DIR"
       ]
     },
     {
@@ -143,12 +144,14 @@ const TAB_TITLES = {
   tabChannels: "Channels & Roles",
   tabEnvironment: "Environment",
   tabLogs: "Logs",
+  tabFFmpeg: "FFmpeg",
   tabSystem: "System"
 };
 
 let activeTab = "tabDashboard";
 let logEventSource = null;
 let logUnreadCount = 0;
+let ffmpegAutoRefreshTimer = null;
 
 function switchTab(id) {
   if (activeTab === id) return;
@@ -198,6 +201,9 @@ function onTabActivated(id) {
       logUnreadCount = 0;
       const _badge = document.getElementById("badgeLogs");
       if (_badge) _badge.textContent = "";
+      break;
+    case "tabFFmpeg":
+      loadFfmpegFiles();
       break;
     case "tabSystem":
       loadHealth();
@@ -844,6 +850,78 @@ function downloadLogs() {
   window.location = "/api/admin/logs/download";
 }
 
+/*  ffmpeg viewer  */
+async function loadFfmpegFiles() {
+  try {
+    setMsg("ffmpegMsg", "Loading ffmpeg files...", "info");
+    const data = await fetchJson("api/admin/jellyfin/ffmpeg/files");
+    const select = document.getElementById("ffmpegFileSelect");
+    const dirEl = document.getElementById("ffmpegDirLabel");
+    if (dirEl) dirEl.textContent = `Directory: ${data.directory || "(unknown)"}`;
+    if (!select) return;
+
+    const files = data.files || [];
+    if (!files.length) {
+      select.innerHTML = "";
+      const box = document.getElementById("ffmpegLogBox");
+      if (box) box.textContent = "No ffmpeg log files found in configured directory.";
+      setMsg("ffmpegMsg", "No ffmpeg files found.", "err");
+      return;
+    }
+
+    select.innerHTML = files
+      .map((f) => `<option value="${escapeHtml(f.name)}">${escapeHtml(f.name)} (${Math.round((f.size || 0) / 1024)} KB)</option>`)
+      .join("");
+
+    setMsg("ffmpegMsg", `Loaded ${files.length} ffmpeg log files.`, "ok");
+    await loadFfmpegSelectedFile();
+  } catch (err) {
+    setMsg("ffmpegMsg", err.message, "err");
+  }
+}
+
+async function loadFfmpegSelectedFile() {
+  const select = document.getElementById("ffmpegFileSelect");
+  const lines = Number(document.getElementById("ffmpegLines")?.value) || 400;
+  if (!select || !select.value) {
+    setMsg("ffmpegMsg", "No ffmpeg file selected.", "err");
+    return;
+  }
+
+  try {
+    const qs = new URLSearchParams({
+      file: String(select.value),
+      lines: String(lines)
+    });
+    const data = await fetchJson(`api/admin/jellyfin/ffmpeg/read?${qs.toString()}`);
+    const box = document.getElementById("ffmpegLogBox");
+    if (box) {
+      box.textContent = data.content || "(empty file)";
+      box.scrollTop = box.scrollHeight;
+    }
+    setMsg("ffmpegMsg", `Loaded ${select.value}.`, "ok");
+  } catch (err) {
+    setMsg("ffmpegMsg", err.message, "err");
+  }
+}
+
+function toggleFfmpegAutoRefresh() {
+  const btn = document.getElementById("ffmpegAutoRefreshBtn");
+  if (ffmpegAutoRefreshTimer) {
+    clearInterval(ffmpegAutoRefreshTimer);
+    ffmpegAutoRefreshTimer = null;
+    if (btn) btn.textContent = "Auto Refresh Off";
+    return;
+  }
+
+  ffmpegAutoRefreshTimer = setInterval(() => {
+    if (activeTab === "tabFFmpeg") {
+      loadFfmpegSelectedFile();
+    }
+  }, 4000);
+  if (btn) btn.textContent = "Auto Refresh On";
+}
+
 function bindButtonClick(id, handler) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -977,6 +1055,13 @@ function wireAll(user) {
   if (logsSearchEl) {
     logsSearchEl.addEventListener("keypress", (ev) => { if (ev.key === "Enter") loadLogs(); });
   }
+
+  // FFmpeg
+  bindButtonClick("ffmpegRefreshFilesBtn", loadFfmpegFiles);
+  bindButtonClick("ffmpegLoadBtn", loadFfmpegSelectedFile);
+  bindButtonClick("ffmpegAutoRefreshBtn", toggleFfmpegAutoRefresh);
+  document.getElementById("ffmpegFileSelect")?.addEventListener("change", loadFfmpegSelectedFile);
+  document.getElementById("ffmpegLines")?.addEventListener("change", loadFfmpegSelectedFile);
 
   // Start live updates
   updateStatusPills();

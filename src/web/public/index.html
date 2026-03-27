@@ -109,6 +109,9 @@
             <span class="nav-icon"></span> Logs
             <span class="nav-badge" id="badgeLogs"></span>
           </button>
+          <button class="nav-btn" data-tab="tabFFmpeg">
+            <span class="nav-icon"></span> FFmpeg
+          </button>
           <button class="nav-btn" data-tab="tabSystem">
             <span class="nav-icon"></span> System
           </button>
@@ -656,6 +659,39 @@
 
             <pre id="logsBox" class="console-box" style="height:340px;overflow:auto">Loading</pre>
             <div id="logsMsg" class="msg"></div>
+          </div>
+        </div>
+
+        <!--  TAB: FFmpeg  -->
+        <div id="tabFFmpeg" class="tab-pane">
+          <p class="pane-title">FFmpeg</p>
+          <p class="pane-sub">Jellyfin transcode/ffmpeg debug viewer. Configure directory in <code>JELLYFIN_FFMPEG_LOG_DIR</code>.</p>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">FFmpeg Log Files</div>
+                <div class="card-subtitle" id="ffmpegDirLabel">Directory: (loading)</div>
+              </div>
+              <div style="display:flex;gap:0.5rem;align-items:center">
+                <label class="text-sm" style="margin:0">
+                  Lines
+                  <input id="ffmpegLines" type="number" min="50" max="5000" value="400" style="width:6rem" />
+                </label>
+                <button type="button" class="btn-secondary btn-sm" id="ffmpegRefreshFilesBtn">Refresh Files</button>
+                <button type="button" class="btn-secondary btn-sm" id="ffmpegLoadBtn">Load Selected</button>
+                <button type="button" class="btn-orange btn-sm" id="ffmpegAutoRefreshBtn">Auto Refresh Off</button>
+              </div>
+            </div>
+
+            <div class="settings-grid" style="margin-bottom:0.8rem">
+              <label>Log File
+                <select id="ffmpegFileSelect"></select>
+              </label>
+            </div>
+
+            <pre id="ffmpegLogBox" class="console-box" style="height:420px;overflow:auto">Select a file and click "Load Selected".</pre>
+            <div id="ffmpegMsg" class="msg"></div>
           </div>
         </div>
 

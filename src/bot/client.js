@@ -542,15 +542,6 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       logger.warn(`Daily news Jellyfin stats fetch failed: ${error.message}`);
     }
 
-    let imageUrl = "";
-    if (available[0]) {
-      imageUrl = await resolveAnnouncementImageUrl({
-        image: available[0].image,
-        mediaId: available[0].mediaId,
-        mediaType: available[0].mediaType
-      });
-    }
-
     const availableText =
       available.length > 0
         ? available
@@ -559,7 +550,6 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         : "No newly available items were detected in recent Seerr activity.";
 
     const summaryText = [
-      "Privacy-safe aggregate stats (no usernames, IPs, or session identities):",
       `• Movies in library: ${usage.movieCount}`,
       `• Series in library: ${usage.seriesCount}`,
       `• Episodes in library: ${usage.episodeCount}`,
@@ -572,7 +562,6 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       title: "Daily Media News Report",
       description: `Daily digest for ${new Date().toLocaleDateString()}`,
       color: 0x39b96e,
-      imageUrl,
       fields: [
         {
           name: "Recently Available (Seerr)",

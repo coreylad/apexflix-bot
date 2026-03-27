@@ -139,10 +139,13 @@ const TAB_TITLES = {
   tabBotConfig: "Bot Configuration",
   tabChannels: "Channels & Roles",
   tabEnvironment: "Environment",
+  tabLogs: "Logs",
   tabSystem: "System"
 };
 
 let activeTab = "tabDashboard";
+let logEventSource = null;
+let logUnreadCount = 0;
 
 function switchTab(id) {
   if (activeTab === id) return;
@@ -185,6 +188,13 @@ function onTabActivated(id) {
       break;
     case "tabEnvironment":
       loadEnvSettings();
+      break;
+    case "tabLogs":
+      // Load recent logs when user views the Logs tab
+      try { loadLogs(); } catch (e) { /* ignore */ }
+      logUnreadCount = 0;
+      const _badge = document.getElementById("badgeLogs");
+      if (_badge) _badge.textContent = "";
       break;
     case "tabSystem":
       loadHealth();
@@ -698,6 +708,123 @@ async function generateSystemdUnit() {
   }
 }
 
+/* ─────────────────────────────── logs utilities ───────── */
+function formatLogEntry(entry) {
+  if (!entry) return "";
+  if (entry.raw) return String(entry.raw);
+  const ts = entry.timestamp || "";
+  const level = (entry.level || "").toUpperCase();
+  const msg = entry.message || "";
+  return `[${ts}] [${level}] ${msg}`;
+}
+
+function appendToLogsBox(line) {
+  const box = document.getElementById("logsBox");
+  if (!box) return;
+  const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+  box.textContent = box.textContent ? box.textContent + "\n" + line : line;
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+async function loadLogs() {
+  const level = document.getElementById("logsLevelFilter")?.value || "";
+  const limit = Number(document.getElementById("logsLimit")?.value) || 200;
+  const search = document.getElementById("logsSearch")?.value || "";
+  setMsg("logsMsg", "Loading logs…", "info");
+  try {
+    const qs = new URLSearchParams();
+    qs.set("limit", String(limit));
+    if (level) qs.set("level", level);
+    if (search) qs.set("search", search);
+    const data = await fetchJson("api/admin/logs?" + qs.toString());
+    const arr = data.logs || [];
+    const box = document.getElementById("logsBox");
+    if (box) {
+      box.textContent = arr.map((l) => l.raw || formatLogEntry(l)).join("\n");
+      box.scrollTop = box.scrollHeight;
+    }
+    setMsg("logsMsg", `Loaded ${arr.length} log lines.`, "ok");
+    const badge = document.getElementById("badgeLogs");
+    if (badge) badge.textContent = arr.length ? String(arr.length) : "";
+    logUnreadCount = 0;
+  } catch (err) {
+    setMsg("logsMsg", err.message, "err");
+  }
+}
+
+function startLogTail() {
+  if (logEventSource) return;
+  try {
+    const es = new EventSource("/api/admin/logs/stream");
+    logEventSource = es;
+    document.getElementById("logsTailToggleBtn")?.classList.add("active");
+    document.getElementById("logsTailToggleBtn")?.textContent = "Stop Tail";
+
+    es.onmessage = (ev) => {
+      try {
+        const obj = JSON.parse(ev.data);
+        const line = obj.raw || formatLogEntry(obj);
+        if (activeTab === "tabLogs") {
+          appendToLogsBox(line);
+        } else {
+          logUnreadCount += 1;
+          const badge = document.getElementById("badgeLogs");
+          if (badge) badge.textContent = String(logUnreadCount);
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+    };
+
+    es.addEventListener("cleared", () => {
+      const box = document.getElementById("logsBox");
+      if (box) box.textContent = "";
+      setMsg("logsMsg", "Logs cleared", "ok");
+    });
+
+    es.onerror = () => {
+      setMsg("logsMsg", "Log stream disconnected or errored.", "err");
+      stopLogTail();
+    };
+  } catch (err) {
+    setMsg("logsMsg", `Failed to start tail: ${err.message}`, "err");
+  }
+}
+
+function stopLogTail() {
+  if (!logEventSource) return;
+  try {
+    logEventSource.close();
+  } catch (e) {}
+  logEventSource = null;
+  document.getElementById("logsTailToggleBtn")?.classList.remove("active");
+  document.getElementById("logsTailToggleBtn")?.textContent = "Start Tail";
+}
+
+function toggleLogTail() {
+  if (logEventSource) stopLogTail();
+  else startLogTail();
+}
+
+async function clearLogs() {
+  if (!confirm("Clear all logs on server? This cannot be undone.")) return;
+  try {
+    await fetchJson("api/admin/logs/clear", { method: "POST" });
+    const box = document.getElementById("logsBox");
+    if (box) box.textContent = "";
+    setMsg("logsMsg", "Logs cleared.", "ok");
+    const badge = document.getElementById("badgeLogs");
+    if (badge) badge.textContent = "";
+  } catch (err) {
+    setMsg("logsMsg", err.message, "err");
+  }
+}
+
+function downloadLogs() {
+  // trigger a download via navigation
+  window.location = "/api/admin/logs/download";
+}
+
 /* ─────────────────────────────── wire all ────────────── */
 function wireAll(user) {
   const userEl = document.getElementById("sidebarUser");
@@ -807,6 +934,18 @@ function wireAll(user) {
       e.target.reset();
     } catch (err) { setMsg("passwordMsg", err.message, "err"); }
   });
+
+  // Logs
+  document.getElementById("logsRefreshBtn")?.addEventListener("click", loadLogs);
+  document.getElementById("logsTailToggleBtn")?.addEventListener("click", toggleLogTail);
+  document.getElementById("logsClearBtn")?.addEventListener("click", clearLogs);
+  document.getElementById("logsDownloadBtn")?.addEventListener("click", downloadLogs);
+  document.getElementById("logsLevelFilter")?.addEventListener("change", loadLogs);
+  document.getElementById("logsLimit")?.addEventListener("change", loadLogs);
+  const logsSearchEl = document.getElementById("logsSearch");
+  if (logsSearchEl) {
+    logsSearchEl.addEventListener("keypress", (ev) => { if (ev.key === "Enter") loadLogs(); });
+  }
 
   // Start live updates
   updateStatusPills();

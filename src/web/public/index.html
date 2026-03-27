@@ -105,6 +105,10 @@
           </button>
 
           <div class="nav-section-label">Admin</div>
+          <button class="nav-btn" data-tab="tabLogs">
+            <span class="nav-icon">📜</span> Logs
+            <span class="nav-badge" id="badgeLogs"></span>
+          </button>
           <button class="nav-btn" data-tab="tabSystem">
             <span class="nav-icon">ðŸ–¥ï¸</span> System
           </button>
@@ -593,6 +597,45 @@
             <button class="btn-primary" id="saveEnvBtn">Save Environment</button>
           </div>
           <div id="envMsg" class="msg"></div>
+        </div>
+
+        <!-- â”€â”€â”€ TAB: Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabLogs" class="tab-pane">
+          <p class="pane-title">Logs</p>
+          <p class="pane-sub">Live bot and server logs. Tail, filter, and download log output.</p>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Log Controls</div>
+                <div class="card-subtitle">Filter and control the live log tail</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem">
+                <label class="text-sm" style="margin:0">
+                  Level
+                  <select id="logsLevelFilter">
+                    <option value="">All</option>
+                    <option value="debug">Debug</option>
+                    <option value="info">Info</option>
+                    <option value="warn">Warn</option>
+                    <option value="error">Error</option>
+                  </select>
+                </label>
+                <label class="text-sm" style="margin:0">
+                  Limit
+                  <input id="logsLimit" type="number" min="10" max="5000" value="200" style="width:6rem" />
+                </label>
+                <input id="logsSearch" placeholder="Search logs..." style="width:18rem;padding:0.4rem" />
+                <button class="btn-secondary btn-sm" id="logsRefreshBtn">Refresh</button>
+                <button class="btn-orange btn-sm" id="logsTailToggleBtn">Start Tail</button>
+                <button class="btn-danger btn-sm" id="logsClearBtn">Clear</button>
+                <button class="btn-primary btn-sm" id="logsDownloadBtn">Download</button>
+              </div>
+            </div>
+
+            <pre id="logsBox" class="console-box" style="height:340px;overflow:auto">Loading…</pre>
+            <div id="logsMsg" class="msg"></div>
+          </div>
         </div>
 
         <!-- â”€â”€â”€ TAB: System â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->

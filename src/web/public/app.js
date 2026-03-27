@@ -389,7 +389,7 @@ async function updateStatusPills() {
   }
 
   try {
-    await fetchJson("api/admin/lidarr/test", { method: "POST" });
+    await fetchJson("api/lidarr/stats");
     pill("pillLidarr", true);
   } catch {
     pill("pillLidarr", false);

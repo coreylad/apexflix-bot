@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { generateSessionToken, verifyPassword, hashPassword } = require("../../services/security");
+const { createLidarrClient } = require("../../services/lidarr");
 
 const DEFAULT_BOT_CONFIG = {
   requestsChannelId: "",
@@ -115,6 +116,22 @@ function firstNonEmpty(values, fallback = "") {
   return fallback;
 }
 
+function asOptionalNumber(value, fallback = 0) {
+  const parsed = Number(String(value ?? "").trim());
+  return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function asOptionalBoolean(value, fallback = false) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
 function parseCookies(cookieHeader) {
   const result = {};
   const raw = cookieHeader || "";
@@ -165,6 +182,24 @@ function requireAuth(db) {
 function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, bot, logger }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
+
+  function buildLidarrConfigFromValues(values = {}) {
+    return {
+      url: firstNonEmpty([values.LIDARR_URL, values.LIDARR_BASE_URL], config?.lidarr?.url || "").replace(/\/$/, ""),
+      apiKey: firstNonEmpty([values.LIDARR_API_KEY], config?.lidarr?.apiKey || ""),
+      allowInsecureTls: asOptionalBoolean(values.LIDARR_ALLOW_INSECURE_TLS, config?.lidarr?.allowInsecureTls || false),
+      rootFolderPath: firstNonEmpty([values.LIDARR_ROOT_FOLDER], config?.lidarr?.rootFolderPath || ""),
+      qualityProfileId: asOptionalNumber(values.LIDARR_QUALITY_PROFILE_ID, config?.lidarr?.qualityProfileId || 0),
+      metadataProfileId: asOptionalNumber(values.LIDARR_METADATA_PROFILE_ID, config?.lidarr?.metadataProfileId || 0),
+      monitor: firstNonEmpty([values.LIDARR_MONITOR], config?.lidarr?.monitor || "all").toLowerCase(),
+      monitorNewItems: firstNonEmpty([values.LIDARR_MONITOR_NEW_ITEMS], config?.lidarr?.monitorNewItems || "all").toLowerCase(),
+      monitored: asOptionalBoolean(values.LIDARR_MONITORED, config?.lidarr?.monitored !== false),
+      searchForMissingAlbums: asOptionalBoolean(
+        values.LIDARR_SEARCH_FOR_MISSING_ALBUMS,
+        config?.lidarr?.searchForMissingAlbums !== false
+      )
+    };
+  }
 
   function resolveJellyfinLogDir() {
     const raw = String(config?.jellyfin?.logDir || "").trim() || "/var/log/jellyfin";
@@ -698,6 +733,26 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
         "Saved to .env and applied to runtime. Discord token/client/guild changes require app restart to reconnect bot.",
       values: next
     });
+  });
+
+  router.post("/admin/lidarr/test", authMiddleware, async (req, res, next) => {
+    try {
+      const values = req.body?.values;
+      if (!values || typeof values !== "object") {
+        return res.status(400).json({ error: "values object is required" });
+      }
+
+      const testClient = createLidarrClient(buildLidarrConfigFromValues(values));
+      const options = await testClient.getOptions();
+
+      return res.json({
+        ok: true,
+        message: `Connected to Lidarr. Loaded ${options.rootFolders.length} root folders, ${options.qualityProfiles.length} quality profiles, and ${options.metadataProfiles.length} metadata profiles.`,
+        ...options
+      });
+    } catch (error) {
+      next(new Error(`Lidarr test failed: ${error.message}`));
+    }
   });
 
   router.use(authMiddleware);

@@ -150,6 +150,17 @@ function renderEnvForm(targetId, allowedKeys, values) {
     .join("");
 }
 
+function collectFormValues(formId) {
+  const form = document.getElementById(formId);
+  if (!form) return {};
+
+  const values = {};
+  for (const el of form.querySelectorAll("input[name], select[name], textarea[name]")) {
+    values[el.name] = el.value;
+  }
+  return values;
+}
+
 /*  tab router  */
 const TAB_TITLES = {
   tabDashboard: "Dashboard",
@@ -450,48 +461,53 @@ function renderSelectOptions(elementId, items, selectedValue, valueKey, labelKey
 }
 
 async function loadLidarrOptions() {
-  const hint = document.getElementById("lidarrOptionsHint");
   try {
     const data = await fetchJson("api/lidarr/options");
-    const defaults = data.defaults || {};
-    const rootFolders = (data.rootFolders || []).map((item) => ({
+    applyLidarrOptions(data);
+  } catch (err) {
+    const hint = document.getElementById("lidarrOptionsHint");
+    if (hint) hint.textContent = "";
+    setMsg("lidarrMsg", err.message, "err");
+  }
+}
+
+function applyLidarrOptions(data) {
+  const hint = document.getElementById("lidarrOptionsHint");
+  const defaults = data.defaults || {};
+  const rootFolders = (data.rootFolders || []).map((item) => ({
       path: item.path,
       label: item.name ? `${item.name} (${item.path})` : item.path
     }));
-    const qualityProfiles = (data.qualityProfiles || []).map((item) => ({ id: String(item.id), label: item.name }));
-    const metadataProfiles = (data.metadataProfiles || []).map((item) => ({ id: String(item.id), label: item.name }));
+  const qualityProfiles = (data.qualityProfiles || []).map((item) => ({ id: String(item.id), label: item.name }));
+  const metadataProfiles = (data.metadataProfiles || []).map((item) => ({ id: String(item.id), label: item.name }));
 
-    renderSelectOptions("lidarrRootFolder", rootFolders, defaults.rootFolderPath, "path", "label");
-    renderSelectOptions(
-      "lidarrQualityProfile",
-      qualityProfiles,
-      String(defaults.qualityProfileId || ""),
-      "id",
-      "label"
-    );
-    renderSelectOptions(
-      "lidarrMetadataProfile",
-      metadataProfiles,
-      String(defaults.metadataProfileId || ""),
-      "id",
-      "label"
-    );
+  renderSelectOptions("lidarrRootFolder", rootFolders, defaults.rootFolderPath, "path", "label");
+  renderSelectOptions(
+    "lidarrQualityProfile",
+    qualityProfiles,
+    String(defaults.qualityProfileId || ""),
+    "id",
+    "label"
+  );
+  renderSelectOptions(
+    "lidarrMetadataProfile",
+    metadataProfiles,
+    String(defaults.metadataProfileId || ""),
+    "id",
+    "label"
+  );
 
-    const monitor = document.getElementById("lidarrMonitor");
-    const monitorNewItems = document.getElementById("lidarrMonitorNewItems");
-    const monitored = document.getElementById("lidarrMonitored");
-    const searchMissing = document.getElementById("lidarrSearchForMissingAlbums");
-    if (monitor) monitor.value = defaults.monitor || "all";
-    if (monitorNewItems) monitorNewItems.value = defaults.monitorNewItems || "all";
-    if (monitored) monitored.value = String(defaults.monitored !== false);
-    if (searchMissing) searchMissing.checked = defaults.searchForMissingAlbums !== false;
+  const monitor = document.getElementById("lidarrMonitor");
+  const monitorNewItems = document.getElementById("lidarrMonitorNewItems");
+  const monitored = document.getElementById("lidarrMonitored");
+  const searchMissing = document.getElementById("lidarrSearchForMissingAlbums");
+  if (monitor) monitor.value = defaults.monitor || "all";
+  if (monitorNewItems) monitorNewItems.value = defaults.monitorNewItems || "all";
+  if (monitored) monitored.value = String(defaults.monitored !== false);
+  if (searchMissing) searchMissing.checked = defaults.searchForMissingAlbums !== false;
 
-    if (hint) {
-      hint.textContent = `Loaded ${rootFolders.length} root folders, ${qualityProfiles.length} quality profiles, and ${metadataProfiles.length} metadata profiles from Lidarr.`;
-    }
-  } catch (err) {
-    if (hint) hint.textContent = "";
-    setMsg("lidarrMsg", err.message, "err");
+  if (hint) {
+    hint.textContent = `Loaded ${rootFolders.length} root folders, ${qualityProfiles.length} quality profiles, and ${metadataProfiles.length} metadata profiles from Lidarr.`;
   }
 }
 
@@ -861,12 +877,7 @@ async function loadEnvSettings() {
 }
 
 async function saveEnvSettings() {
-  const form = document.getElementById("envForm");
-  if (!form) return;
-  const values = {};
-  for (const el of form.querySelectorAll("input[name]")) {
-    values[el.name] = el.value;
-  }
+  const values = collectFormValues("envForm");
   try {
     const data = await fetchJson("api/admin/env", {
       method: "POST",
@@ -874,6 +885,22 @@ async function saveEnvSettings() {
       body: JSON.stringify({ values })
     });
     setMsg("envMsg", data.message || "Environment saved.", "ok");
+  } catch (err) {
+    setMsg("envMsg", err.message, "err");
+  }
+}
+
+async function testLidarrEnvConnection() {
+  const values = collectFormValues("envForm");
+  setMsg("envMsg", "Testing Lidarr connection", "info");
+  try {
+    const data = await fetchJson("api/admin/lidarr/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values })
+    });
+    applyLidarrOptions(data);
+    setMsg("envMsg", data.message || "Connected to Lidarr.", "ok");
   } catch (err) {
     setMsg("envMsg", err.message, "err");
   }
@@ -1212,6 +1239,7 @@ function wireAll(user) {
 
   // Environment
   document.getElementById("saveEnvBtn")?.addEventListener("click", saveEnvSettings);
+  document.getElementById("testLidarrEnvBtn")?.addEventListener("click", testLidarrEnvConnection);
 
   // System
   bindButtonClick("healthRefreshBtn", loadHealth);

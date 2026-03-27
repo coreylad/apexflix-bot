@@ -52,6 +52,47 @@ function extractRequestData(item, overseerr) {
   };
 }
 
+async function enrichRequestDataFromDetails(normalized, requestId, overseerr) {
+  if (normalized.title !== "Unknown title" && normalized.mediaType !== "unknown" && normalized.mediaId > 0) {
+    return normalized;
+  }
+
+  try {
+    const details = await overseerr.getRequestById(requestId);
+    if (!details || typeof details !== "object") {
+      return normalized;
+    }
+
+    const detailedMedia = details.media || details.request?.media || {};
+    const detailedType = normalizeMediaType(
+      details.type || detailedMedia.mediaType || detailedMedia.type || normalized.mediaType
+    );
+    const detailedMediaId = Number(
+      detailedMedia.tmdbId || detailedMedia.id || details.mediaId || normalized.mediaId || 0
+    );
+    const detailedTitle = firstNonEmpty(
+      [
+        detailedMedia.title,
+        detailedMedia.name,
+        details.subject,
+        details.title,
+        normalized.title
+      ],
+      "Unknown title"
+    );
+
+    return {
+      ...normalized,
+      mediaType: detailedType,
+      mediaId: detailedMediaId,
+      title: detailedTitle,
+      requestedBy: details.requestedBy?.id || normalized.requestedBy
+    };
+  } catch (error) {
+    return normalized;
+  }
+}
+
 function createRequestPoller({ config, logger, db, overseerr, bot }) {
   const interval = Math.max(10, config.app.requestStatusPollSeconds);
   let timer = null;
@@ -69,7 +110,8 @@ function createRequestPoller({ config, logger, db, overseerr, bot }) {
           continue;
         }
 
-        const normalized = extractRequestData(request, overseerr);
+        let normalized = extractRequestData(request, overseerr);
+        normalized = await enrichRequestDataFromDetails(normalized, request.id, overseerr);
         const existing = db.getRequestEventById(normalized.requestId);
 
         if (

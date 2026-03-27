@@ -145,9 +145,21 @@ function renderEnvForm(targetId, allowedKeys, values) {
           return `<label>${label}<input name="${key}" type="text" value="${safeVal}" /></label>`;
         })
         .join("");
-      return `<div class="settings-section"><div class="settings-title">${group.title}</div><div class="settings-grid">${fields}</div></div>`;
+      const lidarrActions =
+        targetId === "envForm" && group.title === "Lidarr"
+          ? `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testLidarrEnvBtn">Test Lidarr Connection</button></div>`
+          : "";
+      return `<div class="settings-section"><div class="settings-title">${group.title}</div><div class="settings-grid">${fields}</div>${lidarrActions}</div>`;
     })
     .join("");
+}
+
+function wireDynamicEnvButtons() {
+  const lidarrTestBtn = document.getElementById("testLidarrEnvBtn");
+  if (lidarrTestBtn && !lidarrTestBtn.dataset.wired) {
+    lidarrTestBtn.dataset.wired = "1";
+    lidarrTestBtn.addEventListener("click", testLidarrEnvConnection);
+  }
 }
 
 function collectFormValues(formId) {
@@ -871,6 +883,7 @@ async function loadEnvSettings() {
   try {
     const data = await fetchJson("api/admin/env");
     renderEnvForm("envForm", data.allowedKeys, data.values);
+    wireDynamicEnvButtons();
   } catch (err) {
     setMsg("envMsg", `Failed to load: ${err.message}`, "err");
   }
@@ -1239,7 +1252,6 @@ function wireAll(user) {
 
   // Environment
   document.getElementById("saveEnvBtn")?.addEventListener("click", saveEnvSettings);
-  document.getElementById("testLidarrEnvBtn")?.addEventListener("click", testLidarrEnvConnection);
 
   // System
   bindButtonClick("healthRefreshBtn", loadHealth);

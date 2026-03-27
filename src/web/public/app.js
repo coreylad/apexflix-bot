@@ -387,6 +387,13 @@ async function updateStatusPills() {
   } catch {
     pill("pillOverseerr", false);
   }
+
+  try {
+    await fetchJson("api/admin/lidarr/test", { method: "POST" });
+    pill("pillLidarr", true);
+  } catch {
+    pill("pillLidarr", false);
+  }
 }
 
 /*  dashboard  */

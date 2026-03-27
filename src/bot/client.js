@@ -743,8 +743,9 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
       const media = row.media || {};
       const mediaType = String(row.type || media.mediaType || media.type || "unknown").toLowerCase();
-      const mediaId = Number(media.tmdbId || media.id || row.mediaId || 0);
-      const title = firstNonEmpty(
+      let mediaId = Number(media.tmdbId || media.id || row.mediaId || 0);
+      let poster = media.posterPath || media.poster || "";
+      let title = firstNonEmpty(
         [
           media.title,
           media.name,
@@ -752,8 +753,80 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
           row.title,
           media.originalTitle
         ],
-        `Request #${row.id || "unknown"}`
+        ""
       );
+
+      const missingTitle = !title || /^request\s*#/i.test(title);
+      if (missingTitle && Number.isInteger(Number(row.id)) && Number(row.id) > 0) {
+        const cached = db.getRequestEventById(Number(row.id));
+        if (cached?.title && cached.title !== "Unknown title") {
+          title = cached.title;
+          if (!mediaId && Number(cached.media_id) > 0) {
+            mediaId = Number(cached.media_id);
+          }
+        }
+      }
+
+      if ((!title || /^request\s*#/i.test(title)) && Number(row.id) > 0) {
+        try {
+          const details = await overseerr.getRequestById(Number(row.id));
+          const dMedia = details?.media || details?.request?.media || {};
+          title = firstNonEmpty(
+            [
+              dMedia.title,
+              dMedia.name,
+              details?.subject,
+              details?.title,
+              dMedia.originalTitle,
+              title
+            ],
+            ""
+          );
+          if (!mediaId) {
+            mediaId = Number(dMedia.tmdbId || dMedia.id || details?.mediaId || 0);
+          }
+          if (!poster) {
+            poster = dMedia.posterPath || dMedia.poster || "";
+          }
+        } catch (error) {
+          // Continue with additional fallbacks.
+        }
+      }
+
+      if ((!title || /^request\s*#/i.test(title)) && mediaId > 0) {
+        try {
+          const fallback = await overseerr.getMediaByTmdbId(mediaId, mediaType);
+          title = firstNonEmpty(
+            [fallback?.title, fallback?.name, fallback?.originalTitle, title],
+            ""
+          );
+          if (!poster) {
+            poster = fallback?.posterPath || fallback?.poster || "";
+          }
+        } catch (error) {
+          // Continue with final fallback label.
+        }
+      }
+
+      if (!title) {
+        title = `Request #${row.id || "unknown"}`;
+      }
+
+      if (Number(row.id) > 0 && title && title !== `Request #${row.id}`) {
+        try {
+          db.upsertRequestEvent({
+            requestId: Number(row.id),
+            mediaType: mediaType === "movie" || mediaType === "tv" ? mediaType : "unknown",
+            mediaId: mediaId > 0 ? mediaId : 0,
+            title,
+            status: Number(snapshot.status || 0),
+            statusText: String(snapshot.statusText || "Unknown"),
+            requestedBy: Number(row?.requestedBy?.id || 0) || null
+          });
+        } catch (error) {
+          // Do not fail daily report when caching title fails.
+        }
+      }
 
       const key = `${mediaType}:${mediaId > 0 ? mediaId : title.toLowerCase()}`;
       if (seen.has(key)) {
@@ -766,7 +839,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         mediaType,
         mediaId,
         requestId: row.id,
-        image: media.posterPath || media.poster || ""
+        image: poster
       });
 
       if (output.length >= limit) {

@@ -417,6 +417,30 @@ function createOverseerrClient(config) {
     };
   }
 
+  function normalizeIssue(issue) {
+    const media = issue?.media || {};
+    return {
+      id: Number(issue?.id || 0),
+      status: Number(issue?.status || 0),
+      issueType: String(issue?.issueType || issue?.type || "other").toLowerCase(),
+      subject: firstNonEmpty(
+        [
+          media.title,
+          media.name,
+          issue?.subject,
+          issue?.title
+        ],
+        "Unknown media"
+      ),
+      mediaType: String(media.mediaType || media.type || issue?.mediaType || "unknown").toLowerCase(),
+      createdAt: issue?.createdAt || "",
+      updatedAt: issue?.updatedAt || "",
+      commentsCount: Array.isArray(issue?.comments) ? issue.comments.length : Number(issue?.commentCount || 0),
+      requestedBy:
+        issue?.createdBy?.displayName || issue?.createdBy?.username || issue?.requestedBy?.displayName || ""
+    };
+  }
+
   return {
     getRequestStatusText: (status) => {
       const parsed = Number(status);
@@ -527,6 +551,37 @@ function createOverseerrClient(config) {
         })
       );
       return coerceArray(response?.data?.results ?? response?.data);
+    },
+    getRecentIssues: async (take = 20) => {
+      const client = getClient();
+      const response = await client.get(
+        withQuery("api/v1/issue", {
+          take,
+          skip: 0,
+          sort: "added"
+        })
+      );
+
+      const rows = coerceArray(response?.data?.results ?? response?.data);
+      return rows.map(normalizeIssue);
+    },
+    createIssueComment: async (issueId, message) => {
+      const client = getClient();
+      const id = Number(issueId);
+      const body = {
+        message: String(message || "").trim()
+      };
+
+      if (!Number.isInteger(id) || id <= 0) {
+        throw new Error("Issue ID must be a positive integer.");
+      }
+
+      if (!body.message) {
+        throw new Error("Issue response message cannot be empty.");
+      }
+
+      const response = await client.post(buildEndpoint(`api/v1/issue/${id}/comment`), body);
+      return response?.data || { ok: true };
     },
     getTvSeasonNumbers: async (mediaId) => {
       const client = getClient();

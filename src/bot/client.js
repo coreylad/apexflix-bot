@@ -23,6 +23,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     uploadsChannelId: "",
     updatesChannelId: "",
     newsChannelId: "",
+    reportsChannelId: "",
     requestRoleId: "",
     enforceRequestChannel: false,
     announceOnRequestCreated: true,
@@ -43,7 +44,10 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
   let online = false;
   let dailyNewsTimer = null;
+  let issuesTimer = null;
   let lastDailyNewsDate = "";
+  let issuePollInitialized = false;
+  const seenIssueIds = new Set();
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -82,6 +86,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       uploadsChannelId: normalizeId(stored.uploadsChannelId || DEFAULT_BOT_CONFIG.uploadsChannelId),
       updatesChannelId: normalizeId(stored.updatesChannelId || DEFAULT_BOT_CONFIG.updatesChannelId),
       newsChannelId: normalizeId(stored.newsChannelId || DEFAULT_BOT_CONFIG.newsChannelId),
+      reportsChannelId: normalizeId(stored.reportsChannelId || DEFAULT_BOT_CONFIG.reportsChannelId),
       requestRoleId: normalizeId(stored.requestRoleId || DEFAULT_BOT_CONFIG.requestRoleId),
       enforceRequestChannel: asBoolean(stored.enforceRequestChannel, DEFAULT_BOT_CONFIG.enforceRequestChannel),
       announceOnRequestCreated: asBoolean(stored.announceOnRequestCreated, DEFAULT_BOT_CONFIG.announceOnRequestCreated),
@@ -667,6 +672,106 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     };
   }
 
+  function issueStatusText(status) {
+    const map = {
+      1: "Open",
+      2: "Resolved",
+      3: "Declined"
+    };
+    return map[Number(status)] || `Status ${status}`;
+  }
+
+  function issueTypeText(issueType) {
+    const raw = String(issueType || "other").toLowerCase();
+    return raw
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+  }
+
+  async function announceSeerrIssue(issue) {
+    const cfg = getBotConfig();
+    if (!cfg.reportsChannelId) {
+      return;
+    }
+
+    const payload = buildAnnouncementPayload({
+      title: "New Seerr Issue Report",
+      description: `${issue.subject}`,
+      color: 0xf9844a,
+      fields: [
+        { name: "Issue ID", value: String(issue.id || "unknown"), inline: true },
+        { name: "Type", value: issueTypeText(issue.issueType), inline: true },
+        { name: "Status", value: issueStatusText(issue.status), inline: true },
+        { name: "Media", value: issue.mediaType || "unknown", inline: true },
+        { name: "Comments", value: String(issue.commentsCount || 0), inline: true },
+        { name: "Created", value: String(issue.createdAt || "unknown"), inline: false }
+      ]
+    });
+
+    await sendToChannel(cfg.reportsChannelId, payload);
+  }
+
+  async function pollSeerrIssues() {
+    if (!online) {
+      return;
+    }
+
+    const cfg = getBotConfig();
+    if (!cfg.reportsChannelId) {
+      return;
+    }
+
+    let issues = [];
+    try {
+      issues = await overseerr.getRecentIssues(30);
+    } catch (error) {
+      logger.warn(`Failed to fetch Overseerr issues: ${error.message}`);
+      return;
+    }
+
+    if (!issuePollInitialized) {
+      for (const issue of issues) {
+        if (issue?.id) {
+          seenIssueIds.add(issue.id);
+        }
+      }
+      issuePollInitialized = true;
+      return;
+    }
+
+    const newIssues = issues
+      .filter((issue) => issue?.id && !seenIssueIds.has(issue.id))
+      .sort((a, b) => {
+        const aTime = new Date(a.createdAt || 0).getTime();
+        const bTime = new Date(b.createdAt || 0).getTime();
+        return aTime - bTime;
+      });
+
+    for (const issue of newIssues) {
+      seenIssueIds.add(issue.id);
+      await announceSeerrIssue(issue);
+      logger.info(`Announced Overseerr issue ${issue.id} in reports channel`);
+    }
+  }
+
+  function startIssuePolling() {
+    if (issuesTimer) {
+      return;
+    }
+
+    pollSeerrIssues().catch((error) => {
+      logger.warn(`Initial issue poll failed: ${error.message}`);
+    });
+
+    issuesTimer = setInterval(() => {
+      pollSeerrIssues().catch((error) => {
+        logger.warn(`Issue poll failed: ${error.message}`);
+      });
+    }, 5 * 60 * 1000);
+
+    logger.info("Overseerr issue polling started");
+  }
+
   async function runDailyNewsTick() {
     if (!online) {
       return;
@@ -1016,6 +1121,55 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     await interaction.reply(toEphemeralResponse(`Request #${request.id}: ${title} is currently ${statusText}.`));
   }
 
+  async function handleIssues(interaction) {
+    const limit = interaction.options.getInteger("limit") || 5;
+    const issues = await overseerr.getRecentIssues(limit);
+
+    if (!issues.length) {
+      await interaction.reply(toEphemeralResponse("No recent Overseerr issues found."));
+      return;
+    }
+
+    const lines = issues
+      .slice(0, limit)
+      .map((issue) => {
+        return `• #${issue.id} ${issue.subject} (${issueTypeText(issue.issueType)}, ${issueStatusText(issue.status)})`;
+      })
+      .join("\n");
+
+    await interaction.reply(toEphemeralResponse(`Recent Overseerr issues:\n${lines}`));
+  }
+
+  async function handleRespond(interaction) {
+    const cfg = getBotConfig();
+    if (!cfg.reportsChannelId) {
+      await interaction.reply(
+        toEphemeralResponse("Reports channel is not configured. Set Reports Channel ID in web UI first.")
+      );
+      return;
+    }
+
+    if (interaction.channelId !== cfg.reportsChannelId) {
+      await interaction.reply(
+        toEphemeralResponse(`Use /respond only in <#${cfg.reportsChannelId}>.`)
+      );
+      return;
+    }
+
+    const issueId = interaction.options.getInteger("issue_id", true);
+    const message = String(interaction.options.getString("message", true) || "").trim();
+
+    if (!message) {
+      await interaction.reply(toEphemeralResponse("Response message cannot be empty."));
+      return;
+    }
+
+    await overseerr.createIssueComment(issueId, message);
+    await interaction.reply(
+      toEphemeralResponse(`Posted response to issue #${issueId}.`)
+    );
+  }
+
   async function handleRecent(interaction) {
     const latest = await jellyfin.getLatestItems(8);
     if (latest.length === 0) {
@@ -1183,6 +1337,12 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         case "status":
           await handleStatus(interaction);
           break;
+        case "issues":
+          await handleIssues(interaction);
+          break;
+        case "respond":
+          await handleRespond(interaction);
+          break;
         case "recent":
           await handleRecent(interaction);
           break;
@@ -1229,6 +1389,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       await client.login(config.discord.token);
       online = true;
       startDailyNewsScheduler();
+      startIssuePolling();
     },
     notifyDiscordUser,
     announceRequestStatusChange,

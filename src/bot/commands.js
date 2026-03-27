@@ -44,6 +44,32 @@ function buildCommands() {
           .setRequired(true)
       ),
     new SlashCommandBuilder()
+      .setName("issues")
+      .setDescription("Show recent reports/issues from Overseerr")
+      .addIntegerOption((option) =>
+        option
+          .setName("limit")
+          .setDescription("How many issues to show (1-10)")
+          .setRequired(false)
+          .setMinValue(1)
+          .setMaxValue(10)
+      ),
+    new SlashCommandBuilder()
+      .setName("respond")
+      .setDescription("Respond to a Seerr issue report (reports channel only)")
+      .addIntegerOption((option) =>
+        option
+          .setName("issue_id")
+          .setDescription("Seerr issue ID")
+          .setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("message")
+          .setDescription("Response message to add to the issue")
+          .setRequired(true)
+      ),
+    new SlashCommandBuilder()
       .setName("recent")
       .setDescription("Show latest items from Jellyfin"),
     new SlashCommandBuilder()

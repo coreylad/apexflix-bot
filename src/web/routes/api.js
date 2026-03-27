@@ -1038,6 +1038,23 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
           requestedBy: null
         });
 
+        if (bot && typeof bot.announceLidarrArtistAdded === "function") {
+          try {
+            await bot.announceLidarrArtistAdded({
+              title,
+              artistId: localArtistId > 0 ? localArtistId : 0,
+              genres: created.genres || selected.genres || [],
+              status: created.status || "Added to Lidarr",
+              requestId,
+              requesterDiscordId: "",
+              requesterUsername: "Web User",
+              image: created.remotePoster || selected.remotePoster || ""
+            });
+          } catch (announceErr) {
+            logger.warn(`Failed to announce Lidarr artist add: ${announceErr.message}`);
+          }
+        }
+
         return res.json({
           ok: true,
           requestId,

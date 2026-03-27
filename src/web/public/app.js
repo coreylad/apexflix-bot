@@ -1081,6 +1081,19 @@ async function loadEnvSettings() {
     envAllowedKeysCache = data.allowedKeys || [];
     envValuesCache = { ...(data.values || {}) };
     renderEnvForm("envForm", data.allowedKeys, data.values);
+    
+    // Automatically test connection status for each service
+    setTimeout(() => {
+      if (envValuesCache.OVERSEERR_URL && envValuesCache.OVERSEERR_API_KEY) {
+        testOverseerrEnvConnection();
+      }
+      if (envValuesCache.JELLYFIN_URL && envValuesCache.JELLYFIN_API_KEY) {
+        testJellyfinEnvConnection();
+      }
+      if (envValuesCache.LIDARR_URL && envValuesCache.LIDARR_API_KEY) {
+        testLidarrEnvConnection();
+      }
+    }, 500);
   } catch (err) {
     setMsg("envMsg", `Failed to load: ${err.message}`, "err");
   }

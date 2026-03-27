@@ -88,14 +88,22 @@ function createOverseerrClient(config) {
   }
 
   function normalizeResult(item) {
+    const row = item || {};
     return {
-      id: item.id,
-      mediaType: item.mediaType,
-      title: item.title || item.name || "Unknown title",
-      overview: item.overview || "",
-      releaseDate: item.releaseDate || item.firstAirDate || "",
-      posterPath: item.posterPath || ""
+      id: row.id,
+      mediaType: row.mediaType,
+      title: row.title || row.name || "Unknown title",
+      overview: row.overview || "",
+      releaseDate: row.releaseDate || row.firstAirDate || "",
+      posterPath: row.posterPath || ""
     };
+  }
+
+  function coerceArray(maybeArray) {
+    if (Array.isArray(maybeArray)) {
+      return maybeArray;
+    }
+    return [];
   }
 
   return {
@@ -103,6 +111,7 @@ function createOverseerrClient(config) {
     searchMedia: async (query, mediaType = "all") => {
       const client = getClient();
       const rawQuery = String(query || "").trim();
+      const normalizedType = String(mediaType || "all").toLowerCase();
       let response;
 
       try {
@@ -124,18 +133,19 @@ function createOverseerrClient(config) {
         );
       }
 
-      const all = response.data?.results || [];
+      const all = coerceArray(response?.data?.results ?? response?.data);
       const filtered =
-        mediaType === "all"
+        normalizedType === "all"
           ? all
-          : all.filter((item) => item.mediaType === mediaType);
+          : all.filter((item) => String(item?.mediaType || "").toLowerCase() === normalizedType);
 
       return filtered.map(normalizeResult);
     },
     requestMedia: async ({ mediaType, mediaId, userId }) => {
       const client = getClient();
+      const normalizedType = String(mediaType || "").toLowerCase();
       const response = await client.post(buildEndpoint("api/v1/request"), {
-        mediaType,
+        mediaType: normalizedType,
         mediaId,
         userId
       });
@@ -154,7 +164,7 @@ function createOverseerrClient(config) {
           skip: 0
         })
       );
-      return response.data?.results || [];
+      return coerceArray(response?.data?.results ?? response?.data);
     },
     findUserByUsername: async (username) => {
       const client = getClient();
@@ -166,11 +176,12 @@ function createOverseerrClient(config) {
         })
       );
 
-      const users = response.data?.results || [];
+      const target = String(username || "").toLowerCase();
+      const users = coerceArray(response?.data?.results ?? response?.data);
       const match = users.find(
         (user) =>
-          user.username?.toLowerCase() === username.toLowerCase() ||
-          user.displayName?.toLowerCase() === username.toLowerCase()
+          user.username?.toLowerCase() === target ||
+          user.displayName?.toLowerCase() === target
       );
 
       return match || null;

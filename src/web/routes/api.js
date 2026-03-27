@@ -1079,7 +1079,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
               requestId,
               requesterDiscordId: "",
               requesterUsername: "Web User",
-              image: created.remotePoster || selected.remotePoster || ""
+              image: ""
             });
           } catch (announceErr) {
             logger.warn(`Failed to announce Lidarr artist add: ${announceErr.message}`);
@@ -1249,7 +1249,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
           requestId,
           requesterDiscordId: "",
           requesterUsername: req.auth?.user?.username || "Web Admin",
-          image: created.remotePoster || artist.remotePoster || ""
+          image: ""
         });
       }
 

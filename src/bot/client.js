@@ -1331,7 +1331,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         requestId,
         requesterDiscordId: interaction.user.id,
         requesterUsername: interaction.user.username,
-        image: created.remotePoster || selected.remotePoster || ""
+        image: ""
       });
 
       return;

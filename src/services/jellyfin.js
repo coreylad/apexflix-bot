@@ -198,6 +198,38 @@ function createJellyfinClient(config) {
   }
 
   return {
+    getServerInfo: async () => {
+      const client = getClient();
+
+      try {
+        const publicResponse = await client.get(buildEndpoint("System/Info/Public"));
+        const data = publicResponse?.data || {};
+        return {
+          id: data.Id || data.ServerId || "",
+          serverName: data.ServerName || data.Name || "",
+          version: data.Version || "",
+          productName: data.ProductName || data.Product || "Jellyfin"
+        };
+      } catch (publicError) {
+        const privateResponse = await client.get(buildEndpoint("System/Info"));
+        const data = privateResponse?.data || {};
+        return {
+          id: data.Id || data.ServerId || "",
+          serverName: data.ServerName || data.Name || "",
+          version: data.Version || "",
+          productName: data.ProductName || data.Product || "Jellyfin"
+        };
+      }
+    },
+    getUsers: async () => {
+      const client = getClient();
+      const response = await client.get(buildEndpoint("Users"));
+      const users = Array.isArray(response?.data) ? response.data : [];
+      return users.map((user) => ({
+        id: String(user?.Id || ""),
+        name: String(user?.Name || "").trim()
+      }));
+    },
     getLatestItems: async (limit = 12) => {
       const client = getClient();
       const userId = await resolveUserId(client);

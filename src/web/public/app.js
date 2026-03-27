@@ -97,6 +97,7 @@ const BOOLEAN_OPTIONS = [
 let envAllowedKeysCache = [];
 let envValuesCache = {};
 let lidarrEnvOptionsCache = null;
+let jellyfinEnvDefaultsCache = null;
 
 /*  env form renderer  */
 function renderEnvForm(targetId, allowedKeys, values) {
@@ -187,6 +188,10 @@ function renderEnvForm(targetId, allowedKeys, values) {
         return renderSelectField(key, label, String(rawValue || "all"), LIDARR_MONITOR_NEW_ITEMS_OPTIONS);
       }
 
+      if (key === "JELLYFIN_ALLOW_INSECURE_TLS") {
+        return renderSelectField(key, label, String(rawValue || "false"), BOOLEAN_OPTIONS);
+      }
+
       if (lidarrOptions?.rootFolders?.length && key === "LIDARR_ROOT_FOLDER") {
         return renderSelectField(
           key,
@@ -215,6 +220,10 @@ function renderEnvForm(targetId, allowedKeys, values) {
       }
     }
 
+    if (key === "JELLYFIN_API_KEY") {
+      return `<label>${label}<input name="${key}" type="password" autocomplete="off" value="${safeVal}" /></label>`;
+    }
+
     return `<label>${label}<input name="${key}" type="text" value="${safeVal}" /></label>`;
   }
 
@@ -231,7 +240,7 @@ function renderEnvForm(targetId, allowedKeys, values) {
         appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testOverseerrEnvBtn">Test Overseerr Connection</button><div id="testOverseerrEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
       }
       if (targetId === "envForm" && group.title === "Jellyfin") {
-        appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testJellyfinEnvBtn">Test Jellyfin Connection</button><div id="testJellyfinEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
+        appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testJellyfinEnvBtn">Test Jellyfin Connection</button><button type="button" class="btn-secondary" id="loadJellyfinDefaultsBtn">Load Jellyfin Defaults</button><div id="testJellyfinEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
       }
       if (targetId === "envForm" && group.title === "Lidarr") {
         appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testLidarrEnvBtn">Test Lidarr Connection</button><div id="testLidarrEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
@@ -1207,7 +1216,39 @@ async function testJellyfinEnvConnection() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ values })
     });
+    jellyfinEnvDefaultsCache = data.defaults || null;
     setAppTestButtonState("jellyfin", { busy: false, text: data.message || "Connected to Jellyfin.", type: "ok" });
+  } catch (err) {
+    setAppTestButtonState("jellyfin", { busy: false, text: err.message, type: "err" });
+  }
+}
+
+async function loadJellyfinEnvDefaults() {
+  const values = collectFormValues("envForm");
+  setAppTestButtonState("jellyfin", { busy: true, text: "Loading Jellyfin defaults...", type: "info" });
+  try {
+    const data = await fetchJson("api/admin/jellyfin/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values })
+    });
+
+    const defaults = data.defaults || jellyfinEnvDefaultsCache || {};
+    const mergedValues = {
+      ...envValuesCache,
+      ...values,
+      JELLYFIN_USER_ID: values.JELLYFIN_USER_ID || defaults.userId || envValuesCache.JELLYFIN_USER_ID || "",
+      JELLYFIN_USERNAME: values.JELLYFIN_USERNAME || defaults.username || envValuesCache.JELLYFIN_USERNAME || "",
+      JELLYFIN_CLIENT_NAME: values.JELLYFIN_CLIENT_NAME || defaults.clientName || envValuesCache.JELLYFIN_CLIENT_NAME || "ApexFlix",
+      JELLYFIN_DEVICE_NAME: values.JELLYFIN_DEVICE_NAME || defaults.deviceName || envValuesCache.JELLYFIN_DEVICE_NAME || "ApexFlix Bot",
+      JELLYFIN_DEVICE_ID: values.JELLYFIN_DEVICE_ID || defaults.deviceId || envValuesCache.JELLYFIN_DEVICE_ID || "apexflix-bot",
+      JELLYFIN_CLIENT_VERSION: values.JELLYFIN_CLIENT_VERSION || defaults.clientVersion || envValuesCache.JELLYFIN_CLIENT_VERSION || "1.0.0"
+    };
+
+    envValuesCache = mergedValues;
+    jellyfinEnvDefaultsCache = defaults;
+    renderEnvForm("envForm", envAllowedKeysCache, mergedValues);
+    setAppTestButtonState("jellyfin", { busy: false, text: data.message || "Loaded Jellyfin defaults.", type: "ok" });
   } catch (err) {
     setAppTestButtonState("jellyfin", { busy: false, text: err.message, type: "err" });
   }
@@ -1561,6 +1602,10 @@ function wireAll(user) {
     }
     if (button.id === "testJellyfinEnvBtn") {
       testJellyfinEnvConnection();
+      return;
+    }
+    if (button.id === "loadJellyfinDefaultsBtn") {
+      loadJellyfinEnvDefaults();
       return;
     }
     if (button.id === "testLidarrEnvBtn") {

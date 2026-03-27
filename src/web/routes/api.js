@@ -835,14 +835,39 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
       }
 
       const testClient = createJellyfinClient(buildJellyfinConfigFromValues(values));
-      const [stats, sections] = await Promise.all([
+      const [stats, sections, serverInfo, users] = await Promise.all([
         testClient.getUsageStats(),
-        testClient.getLibrarySections()
+        testClient.getLibrarySections(),
+        typeof testClient.getServerInfo === "function"
+          ? testClient.getServerInfo().catch(() => null)
+          : Promise.resolve(null),
+        typeof testClient.getUsers === "function"
+          ? testClient.getUsers().catch(() => [])
+          : Promise.resolve([])
       ]);
+
+      const requestedUsername = firstNonEmpty([values.JELLYFIN_USERNAME], "");
+      const preferredUser = users.find(
+        (user) => requestedUsername && String(user.name || "").toLowerCase() === requestedUsername.toLowerCase()
+      ) || users[0] || null;
+      const serverName = firstNonEmpty([serverInfo?.serverName], "Jellyfin");
+      const serverId = String(serverInfo?.id || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+
+      const defaults = {
+        userId: preferredUser?.id || "",
+        username: preferredUser?.name || "",
+        clientName: `ApexFlix (${serverName})`,
+        deviceName: `${serverName} Bot`,
+        deviceId: serverId ? `apexflix-${serverId.slice(0, 12)}` : "apexflix-bot",
+        clientVersion: firstNonEmpty([serverInfo?.version], "1.0.0")
+      };
 
       return res.json({
         ok: true,
         message: "Connected to Jellyfin.",
+        serverInfo,
+        users,
+        defaults,
         details: {
           activeSessions: Number(stats?.activeSessions || 0),
           movieCount: Number(stats?.movieCount || 0),

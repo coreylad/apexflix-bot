@@ -50,9 +50,12 @@ function buildCommands() {
       .addStringOption((option) =>
         option
           .setName("season")
-          .setDescription("TV only: all, latest, season1, or season[1]")
+          .setDescription("TV only: 1, all, latest, season1, or season[1]")
           .setRequired(false)
       ),
+    new SlashCommandBuilder()
+      .setName("requesthelp")
+      .setDescription("Show how to use the /request command with TV seasons"),
     new SlashCommandBuilder()
       .setName("status")
       .setDescription("Check request status in Overseerr")

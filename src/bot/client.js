@@ -316,6 +316,13 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       return { mode: "latest" };
     }
 
+    if (/^\d+$/.test(normalized)) {
+      const seasonNumber = Number(normalized);
+      if (Number.isInteger(seasonNumber) && seasonNumber > 0) {
+        return { mode: "single", seasonNumber };
+      }
+    }
+
     const compact = normalized.replace(/\s+/g, "");
     const match = compact.match(/^season(?:\[(\d+)\]|(\d+))$/);
     if (match) {
@@ -326,6 +333,29 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     }
 
     return { mode: "invalid", input: rawValue };
+  }
+
+  async function handleRequestHelp(interaction) {
+    const helpText = [
+      "How to use /request",
+      "",
+      "Movie:",
+      "/request media_type:movie media_id:603",
+      "",
+      "TV (season modes):",
+      "/request media_type:tv media_id:1399 season:1",
+      "/request media_type:tv media_id:1399 season:all",
+      "/request media_type:tv media_id:1399 season:latest",
+      "/request media_type:tv media_id:1399 season:season1",
+      "/request media_type:tv media_id:1399 season:season[1]",
+      "",
+      "Notes:",
+      "- For TV, season is required.",
+      "- For movies, do not set season.",
+      "- Seasons are validated against Seerr metadata before requesting."
+    ].join("\n");
+
+    await interaction.reply(toEphemeralResponse(helpText));
   }
 
   async function registerSlashCommands() {
@@ -417,7 +447,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     if (mediaType === "tv" && parsedSeason.mode === "none") {
       await interaction.reply(
         toEphemeralResponse(
-          "TV requests require a season mode: all, latest, season1, or season[1]."
+          "TV requests require a season mode: 1, all, latest, season1, or season[1]."
         )
       );
       return;
@@ -426,7 +456,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     if (mediaType === "tv" && parsedSeason.mode === "invalid") {
       await interaction.reply(
         toEphemeralResponse(
-          "Invalid season format. Use one of: all, latest, season1, season[1]."
+          "Invalid season format. Use one of: 1, all, latest, season1, season[1]."
         )
       );
       return;
@@ -613,6 +643,9 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
           break;
         case "recent":
           await handleRecent(interaction);
+          break;
+        case "requesthelp":
+          await handleRequestHelp(interaction);
           break;
         default:
           await interaction.reply(toEphemeralResponse("Unknown command."));

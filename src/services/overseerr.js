@@ -5,7 +5,9 @@ const REQUEST_STATUS = {
   1: "Pending",
   2: "Approved",
   3: "Declined",
-  4: "Available"
+  4: "Available",
+  5: "Processing",
+  6: "Partially Available"
 };
 
 function createOverseerrClient(config) {

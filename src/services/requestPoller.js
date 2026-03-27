@@ -1,7 +1,45 @@
+function firstNonEmpty(values, fallback = "") {
+  for (const value of values) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    const normalized = String(value).trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return fallback;
+}
+
+function normalizeMediaType(value) {
+  const raw = String(value || "").toLowerCase();
+  if (raw === "movie" || raw === "tv") {
+    return raw;
+  }
+  return "unknown";
+}
+
 function extractRequestData(item, overseerr) {
-  const mediaType = item.type || item.media?.mediaType || "unknown";
-  const mediaId = item.media?.tmdbId || 0;
-  const title = item.media?.title || item.media?.name || "Unknown title";
+  const mediaType = normalizeMediaType(
+    item.type || item.media?.mediaType || item.media?.type || item.subjectType
+  );
+  const mediaId = Number(
+    item.media?.tmdbId || item.mediaId || item.media?.id || item.media?.tmdb_id || 0
+  );
+  const title = firstNonEmpty(
+    [
+      item.media?.title,
+      item.media?.name,
+      item.subject,
+      item.title,
+      item.request?.media?.title,
+      item.request?.media?.name,
+      item.media?.originalTitle
+    ],
+    "Unknown title"
+  );
 
   return {
     requestId: item.id,
@@ -33,6 +71,15 @@ function createRequestPoller({ config, logger, db, overseerr, bot }) {
 
         const normalized = extractRequestData(request, overseerr);
         const existing = db.getRequestEventById(normalized.requestId);
+
+        if (
+          normalized.title === "Unknown title" &&
+          existing?.title &&
+          existing.title !== "Unknown title"
+        ) {
+          normalized.title = existing.title;
+        }
+
         db.upsertRequestEvent(normalized);
 
         if (existing && existing.status !== normalized.status) {

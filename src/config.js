@@ -31,7 +31,9 @@ function optionalTrimmed(name, fallback = "") {
   if (raw === undefined || raw === null || raw === "") {
     return fallback;
   }
-  return String(raw).trim();
+  const trimmed = String(raw).trim();
+  const quoted = trimmed.match(/^(["'])(.*)\1$/);
+  return quoted ? quoted[2].trim() : trimmed;
 }
 
 function firstDefined(names, fallback = "") {

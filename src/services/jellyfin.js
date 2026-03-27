@@ -5,6 +5,12 @@ function createJellyfinClient(config) {
   let authBackoffUntil = 0;
   const AUTH_BACKOFF_MS = 2 * 60 * 1000;
 
+  function normalizedApiKey() {
+    const raw = String(config.apiKey || "").trim();
+    const quoted = raw.match(/^(["'])(.*)\1$/);
+    return quoted ? quoted[2].trim() : raw;
+  }
+
   function normalizedBaseUrl() {
     const raw = String(config.url || "").trim();
     if (!raw) {
@@ -22,7 +28,7 @@ function createJellyfinClient(config) {
 
   function ensureConfigured() {
     const base = normalizedBaseUrl();
-    if (!base || !config.apiKey) {
+    if (!base || !normalizedApiKey()) {
       throw new Error("Jellyfin is not configured yet. Set JELLYFIN_URL and JELLYFIN_API_KEY.");
     }
 
@@ -43,8 +49,9 @@ function createJellyfinClient(config) {
   }
 
   function buildAuthorizationHeader() {
+    const apiKey = normalizedApiKey();
     return [
-      `MediaBrowser Token=\"${escapeHeaderValue(config.apiKey)}\"`,
+      `MediaBrowser Token=\"${escapeHeaderValue(apiKey)}\"`,
       `Client=\"${escapeHeaderValue(config.clientName || "ApexFlix")}\"`,
       `Device=\"${escapeHeaderValue(config.deviceName || "ApexFlix Bot")}\"`,
       `DeviceId=\"${escapeHeaderValue(config.deviceId || "apexflix-bot")}\"`,
@@ -87,10 +94,12 @@ function createJellyfinClient(config) {
         ? new https.Agent({ rejectUnauthorized: false })
         : undefined;
 
+    const apiKey = normalizedApiKey();
+
     const client = axios.create({
       headers: {
         Authorization: buildAuthorizationHeader(),
-        "X-Emby-Token": config.apiKey,
+        "X-Emby-Token": apiKey,
         "Content-Type": "application/json"
       },
       timeout: 15000,

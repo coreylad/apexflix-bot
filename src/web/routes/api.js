@@ -268,6 +268,61 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
     });
   });
 
+  router.post("/admin/requests/backfill", authMiddleware, async (req, res, next) => {
+    try {
+      const requestIds = db.getAllRequestIds();
+      let updated = 0;
+      let skipped = 0;
+
+      for (const requestId of requestIds) {
+        try {
+          const details = await overseerr.getRequestById(requestId);
+          if (!details || typeof details !== "object") {
+            skipped += 1;
+            continue;
+          }
+
+          const media = details.media || details.request?.media || {};
+          const title =
+            media.title ||
+            media.name ||
+            details.subject ||
+            details.title ||
+            "Unknown title";
+
+          const mediaType =
+            String(details.type || media.mediaType || media.type || "unknown").toLowerCase();
+          const mediaId = Number(media.tmdbId || media.id || details.mediaId || 0);
+          const status = Number(details.status || 0);
+
+          db.upsertRequestEvent({
+            requestId: details.id || requestId,
+            mediaType: mediaType === "movie" || mediaType === "tv" ? mediaType : "unknown",
+            mediaId,
+            title,
+            status,
+            statusText: overseerr.getRequestStatusText(status),
+            requestedBy: details.requestedBy?.id
+          });
+
+          updated += 1;
+        } catch (error) {
+          skipped += 1;
+        }
+      }
+
+      return res.json({
+        ok: true,
+        updated,
+        skipped,
+        total: requestIds.length,
+        message: `Backfill complete. Updated ${updated} request rows; skipped ${skipped}.`
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/admin/env", authMiddleware, (req, res) => {
     const values = req.body?.values;
     if (!values || typeof values !== "object") {

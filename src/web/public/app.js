@@ -296,6 +296,15 @@ async function saveBotConfig() {
   setMessage("botConfigResult", response.message || "Bot config saved.");
 }
 
+async function backfillRequests() {
+  const response = await fetchJson("api/admin/requests/backfill", {
+    method: "POST"
+  });
+
+  setMessage("backfillResult", response.message || "Backfill complete.");
+  await loadRequests();
+}
+
 async function checkSession() {
   try {
     const me = await fetchJson("api/auth/me");
@@ -328,6 +337,7 @@ function wireAuth() {
   const logoutBtn = document.getElementById("logoutBtn");
   const saveEnvBtn = document.getElementById("saveEnvBtn");
   const saveBotConfigBtn = document.getElementById("saveBotConfigBtn");
+  const backfillRequestsBtn = document.getElementById("backfillRequestsBtn");
   const passwordForm = document.getElementById("passwordForm");
 
   setupForm.addEventListener("submit", async (event) => {
@@ -417,6 +427,14 @@ function wireAuth() {
       await saveBotConfig();
     } catch (error) {
       setMessage("botConfigResult", error.message, true);
+    }
+  });
+
+  backfillRequestsBtn.addEventListener("click", async () => {
+    try {
+      await backfillRequests();
+    } catch (error) {
+      setMessage("backfillResult", error.message, true);
     }
   });
 

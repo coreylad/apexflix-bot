@@ -94,6 +94,10 @@ function initializeDatabase(logger) {
     "SELECT * FROM request_events ORDER BY last_checked_at DESC LIMIT ?"
   );
 
+  const getAllRequestIdsStmt = db.prepare(
+    "SELECT request_id FROM request_events ORDER BY request_id DESC"
+  );
+
   const findAdminByUsernameStmt = db.prepare(
     "SELECT * FROM admin_users WHERE username = ?"
   );
@@ -163,6 +167,7 @@ function initializeDatabase(logger) {
     },
     getRequestEventById: (requestId) => getRequestByIdStmt.get(requestId) || null,
     getRecentRequestEvents: (limit = 20) => getRecentRequestsStmt.all(limit),
+    getAllRequestIds: () => getAllRequestIdsStmt.all().map((row) => row.request_id),
     countAdminUsers: () => countAdminsStmt.get()?.count || 0,
     createAdminUser: ({ username, passwordHash }) => {
       const result = insertAdminStmt.run(username, passwordHash, new Date().toISOString());

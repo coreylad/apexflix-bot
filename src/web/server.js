@@ -40,7 +40,8 @@ function createWebServer({ config, logger, db, overseerr, jellyfin, envManager, 
       jellyfin,
       config,
       envManager,
-      bot
+      bot,
+      logger
     })
   );
 

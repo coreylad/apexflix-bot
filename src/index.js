@@ -9,7 +9,11 @@ const { createRequestPoller } = require("./services/requestPoller");
 const { createEnvManager } = require("./services/envManager");
 
 async function bootstrap() {
-  const logger = createLogger(config.app.logLevel);
+  const logger = createLogger({
+    level: config.app.logLevel,
+    filePath: config.app.logFile,
+    maxBuffer: config.app.logBufferSize
+  });
   const db = initializeDatabase(logger);
   const envManager = createEnvManager();
 

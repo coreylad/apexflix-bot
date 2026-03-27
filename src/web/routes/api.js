@@ -162,7 +162,7 @@ function requireAuth(db) {
   };
 }
 
-function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot }) {
+function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, logger }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
 
@@ -579,6 +579,91 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot }) {
   });
 
   router.use(authMiddleware);
+
+  // ---- Logs endpoints -------------------------------------------------
+  router.get("/admin/logs", (req, res, next) => {
+    try {
+      const limit = Math.min(Number(req.query.limit) || 500, 5000);
+      const level = String(req.query.level || "").trim();
+      const search = String(req.query.search || "").trim();
+
+      if (!logger || typeof logger.getRecentLogs !== "function") {
+        return res.status(503).json({ error: "Logging service unavailable." });
+      }
+
+      const logs = logger.getRecentLogs({ limit, level, search });
+      return res.json({ ok: true, logs, filePath: logger.filePath || "" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/logs/clear", (req, res, next) => {
+    try {
+      if (!logger || typeof logger.clearLogs !== "function") {
+        return res.status(503).json({ error: "Logging service unavailable." });
+      }
+
+      logger.clearLogs();
+      return res.json({ ok: true, message: "Logs cleared." });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/logs/download", (req, res, next) => {
+    try {
+      if (!logger || !logger.filePath) {
+        return res.status(503).json({ error: "Logging service unavailable." });
+      }
+
+      const filePath = logger.filePath;
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "Log file not found." });
+      }
+
+      return res.download(filePath, path.basename(filePath));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/logs/stream", (req, res, next) => {
+    try {
+      if (!logger || !logger.events) {
+        return res.status(503).json({ error: "Logging service unavailable." });
+      }
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders && res.flushHeaders();
+
+      const onLog = (entry) => {
+        try {
+          res.write(`data: ${JSON.stringify(entry)}\n\n`);
+        } catch (e) {
+          // ignore
+        }
+      };
+
+      const onCleared = () => {
+        try {
+          res.write(`event: cleared\ndata: {}\n\n`);
+        } catch (e) {}
+      };
+
+      logger.events.on("log", onLog);
+      logger.events.on("cleared", onCleared);
+
+      req.on("close", () => {
+        logger.events.removeListener("log", onLog);
+        logger.events.removeListener("cleared", onCleared);
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.get("/requests/recent", (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 20, 100);

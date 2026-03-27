@@ -66,6 +66,8 @@ function refreshConfigFromProcess() {
   config.app.port = optionalNumber("PORT", 1337);
   config.app.requestStatusPollSeconds = optionalNumber("REQUEST_STATUS_POLL_SECONDS", 60);
   config.app.logLevel = optional("LOG_LEVEL", "info").toLowerCase();
+  config.app.logFile = optional("LOG_FILE", "logs/apexflix.log");
+  config.app.logBufferSize = optionalNumber("LOG_BUFFER_SIZE", 2000);
   config.app.trustProxy = optionalBoolean("TRUST_PROXY", true);
   config.app.basePath = optional("APP_BASE_PATH", "/") || "/";
 }

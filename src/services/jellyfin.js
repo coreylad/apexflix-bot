@@ -1,4 +1,5 @@
 const axios = require("axios");
+const https = require("https");
 
 function createJellyfinClient(config) {
   function ensureConfigured() {
@@ -9,13 +10,19 @@ function createJellyfinClient(config) {
 
   function getClient() {
     ensureConfigured();
+    const httpsAgent =
+      config.allowInsecureTls && config.baseUrl.startsWith("https://")
+        ? new https.Agent({ rejectUnauthorized: false })
+        : undefined;
+
     return axios.create({
       baseURL: config.baseUrl,
       headers: {
         "X-Emby-Token": config.apiKey,
         "Content-Type": "application/json"
       },
-      timeout: 15000
+      timeout: 15000,
+      httpsAgent
     });
   }
 

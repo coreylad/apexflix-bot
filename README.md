@@ -81,6 +81,20 @@ On a new install, the web UI opens a setup wizard where you:
 - save Discord, Jellyfin, and Overseerr settings
 - continue directly into the private dashboard
 
+## Reverse Proxy Support
+
+This app supports reverse proxies for both directions:
+- Upstream calls to Overseerr/Jellyfin (their URL can be a proxied HTTPS URL, including subpaths)
+- Inbound app hosting behind Nginx/Caddy/Traefik (including subpath mounting)
+
+Key settings:
+- `OVERSEERR_BASE_URL`: full external/internal URL ApexFlix should call, e.g. `https://media.example.com/overseerr`
+- `JELLYFIN_BASE_URL`: full URL ApexFlix should call, e.g. `https://media.example.com/jellyfin`
+- `TRUST_PROXY=true`: trust `X-Forwarded-*` headers so secure cookies work behind HTTPS proxies
+- `APP_BASE_PATH=/` (or `/apexflix`): mount ApexFlix under a subpath
+- `OVERSEERR_ALLOW_INSECURE_TLS=true` only if your proxy uses self-signed TLS
+- `JELLYFIN_ALLOW_INSECURE_TLS=true` only if your proxy uses self-signed TLS
+
 ## Notes
 
 - This app uses local SQLite in `data/app.db`.

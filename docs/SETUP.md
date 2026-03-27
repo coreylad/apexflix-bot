@@ -279,6 +279,66 @@ http://127.0.0.1:1337
 
 This is the recommended setup if you want HTTPS from the internet.
 
+### Reverse proxy URL examples for Overseerr/Jellyfin
+
+If Overseerr is behind your proxy at `https://media.example.com/overseerr`, set:
+
+```text
+OVERSEERR_BASE_URL=https://media.example.com/overseerr
+```
+
+If Jellyfin is behind your proxy at `https://media.example.com/jellyfin`, set:
+
+```text
+JELLYFIN_BASE_URL=https://media.example.com/jellyfin
+```
+
+Use the full URL exactly as it is reachable from the ApexFlix server.
+
+### Run ApexFlix itself behind a reverse proxy on a subpath
+
+Set in ApexFlix:
+
+```text
+TRUST_PROXY=true
+APP_BASE_PATH=/apexflix
+PORT=1337
+```
+
+Then ApexFlix will serve UI/API at `/apexflix` and `/apexflix/api`.
+
+### Nginx example for subpath hosting
+
+```nginx
+server {
+	listen 443 ssl;
+	server_name apps.example.com;
+
+	# ssl_certificate ...
+	# ssl_certificate_key ...
+
+	location /apexflix/ {
+		proxy_pass http://127.0.0.1:1337/apexflix/;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+	}
+}
+```
+
+If your proxy TLS certificate is self-signed for upstream integrations, set:
+
+```text
+OVERSEERR_ALLOW_INSECURE_TLS=true
+JELLYFIN_ALLOW_INSECURE_TLS=true
+```
+
+Use these only when necessary.
+
 ## 9. Updating the App
 
 To update later:

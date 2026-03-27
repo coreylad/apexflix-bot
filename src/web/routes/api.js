@@ -52,15 +52,18 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
 
-  function issueSession(res, userId, username) {
+  function buildSessionCookie(req, value, maxAgeSeconds) {
+    const secure = req.secure ? "; Secure" : "";
+    const maxAge = Number.isInteger(maxAgeSeconds) ? `; Max-Age=${maxAgeSeconds}` : "";
+    return `apexflix_session=${encodeURIComponent(value)}; HttpOnly; Path=/; SameSite=Lax${maxAge}${secure}`;
+  }
+
+  function issueSession(req, res, userId, username) {
     const token = generateSessionToken();
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
     db.createSession({ token, userId, expiresAt });
 
-    res.setHeader(
-      "Set-Cookie",
-      `apexflix_session=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=604800; SameSite=Lax`
-    );
+    res.setHeader("Set-Cookie", buildSessionCookie(req, token, 604800));
 
     return res.json({ ok: true, username });
   }
@@ -119,7 +122,7 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
       config.refreshConfigFromProcess();
     }
 
-    return issueSession(res, Number(userId), username);
+    return issueSession(req, res, Number(userId), username);
   });
 
   router.post("/auth/login", (req, res) => {
@@ -139,15 +142,12 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    return issueSession(res, user.id, user.username);
+    return issueSession(req, res, user.id, user.username);
   });
 
   router.post("/auth/logout", authMiddleware, (req, res) => {
     db.deleteSession(req.auth.token);
-    res.setHeader(
-      "Set-Cookie",
-      "apexflix_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax"
-    );
+    res.setHeader("Set-Cookie", buildSessionCookie(req, "", 0));
     res.json({ ok: true });
   });
 

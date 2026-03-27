@@ -1,4 +1,5 @@
 const axios = require("axios");
+const https = require("https");
 
 const REQUEST_STATUS = {
   1: "Pending",
@@ -16,13 +17,19 @@ function createOverseerrClient(config) {
 
   function getClient() {
     ensureConfigured();
+    const httpsAgent =
+      config.allowInsecureTls && config.baseUrl.startsWith("https://")
+        ? new https.Agent({ rejectUnauthorized: false })
+        : undefined;
+
     return axios.create({
       baseURL: config.baseUrl,
       headers: {
         "X-Api-Key": config.apiKey,
         "Content-Type": "application/json"
       },
-      timeout: 15000
+      timeout: 15000,
+      httpsAgent
     });
   }
 

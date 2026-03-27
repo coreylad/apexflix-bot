@@ -63,13 +63,13 @@ function renderEnvForm(targetId, allowedKeys, values) {
 }
 
 async function loadHealth() {
-  const data = await fetchJson("/api/health");
+  const data = await fetchJson("api/health");
   const box = document.getElementById("health");
   box.textContent = JSON.stringify(data, null, 2);
 }
 
 async function loadRequests() {
-  const data = await fetchJson("/api/requests/recent?limit=10");
+  const data = await fetchJson("api/requests/recent?limit=10");
   const el = document.getElementById("requests");
 
   renderList(
@@ -81,7 +81,7 @@ async function loadRequests() {
 }
 
 async function loadLatest() {
-  const data = await fetchJson("/api/jellyfin/latest?limit=10");
+  const data = await fetchJson("api/jellyfin/latest?limit=10");
   const el = document.getElementById("latest");
 
   renderList(
@@ -106,7 +106,7 @@ function wireForm() {
     };
 
     try {
-      const data = await fetchJson("/api/request", {
+      const data = await fetchJson("api/request", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -124,7 +124,7 @@ function wireForm() {
 }
 
 async function loadEnvSettings() {
-  const data = await fetchJson("/api/admin/env");
+  const data = await fetchJson("api/admin/env");
   renderEnvForm("envForm", data.allowedKeys, data.values);
 }
 
@@ -137,7 +137,7 @@ async function saveEnvSettings() {
     values[field.name] = field.value;
   }
 
-  const response = await fetchJson("/api/admin/env", {
+  const response = await fetchJson("api/admin/env", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -150,7 +150,7 @@ async function saveEnvSettings() {
 
 async function checkSession() {
   try {
-    const me = await fetchJson("/api/auth/me");
+    const me = await fetchJson("api/auth/me");
     return me.user;
   } catch (error) {
     return null;
@@ -158,7 +158,7 @@ async function checkSession() {
 }
 
 async function loadSetupStatus() {
-  return fetchJson("/api/setup/status");
+  return fetchJson("api/setup/status");
 }
 
 async function showDashboard(user) {
@@ -201,7 +201,7 @@ function wireAuth() {
     }
 
     try {
-      const response = await fetchJson("/api/setup/initialize", {
+      const response = await fetchJson("api/setup/initialize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -228,7 +228,7 @@ function wireAuth() {
     const formData = new FormData(loginForm);
 
     try {
-      const data = await fetchJson("/api/auth/login", {
+      const data = await fetchJson("api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -248,7 +248,7 @@ function wireAuth() {
 
   logoutBtn.addEventListener("click", async () => {
     try {
-      await fetchJson("/api/auth/logout", { method: "POST" });
+      await fetchJson("api/auth/logout", { method: "POST" });
       location.reload();
     } catch (error) {
       alert(error.message);
@@ -268,7 +268,7 @@ function wireAuth() {
     const formData = new FormData(passwordForm);
 
     try {
-      await fetchJson("/api/auth/change-password", {
+      await fetchJson("api/auth/change-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

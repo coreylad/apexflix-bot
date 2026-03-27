@@ -301,6 +301,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     const isAvailable = Number(status) === 4;
 
     const mention = cfg.mentionRequesterInChannel && requesterDiscordId ? `<@${requesterDiscordId}>` : "";
+    const availableMention = "";
 
     const posterUrl = await resolveAnnouncementImageUrl({
       image,
@@ -328,7 +329,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         title: "Media Is Now Available",
         description: rendered,
         color: 0x2ecc71,
-        mention,
+        mention: availableMention,
         imageUrl: posterUrl,
         fields: [
           { name: "Request ID", value: String(requestId || "unknown"), inline: true },

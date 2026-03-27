@@ -648,7 +648,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
 
     const mediaId = new TextInputBuilder()
       .setCustomId(REQUEST_MODAL_MEDIA_ID)
-      .setLabel("TMDB ID/URL (movie,tv) or artist query (music)")
+      .setLabel("TMDB ID/URL or music artist query")
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setPlaceholder("1399, TMDB URL, or artist name/MBID")

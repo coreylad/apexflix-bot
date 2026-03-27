@@ -11,7 +11,17 @@ const DEFAULT_BOT_CONFIG = {
   reportsChannelId: "",
   jellyfinNowPlayingChannelId: "",
   jellyfinStatsChannelId: "",
+  newMoviesChannelId: "",
+  newShowsChannelId: "",
+  newEpisodesChannelId: "",
+  generalChannelId: "",
+  welcomeChannelId: "",
+  suggestionsChannelId: "",
+  cuttingBoardChannelId: "",
+  botTestingChannelId: "",
   requestRoleId: "",
+  adminRoleId: "",
+  defaultMemberRoleId: "",
   enforceRequestChannel: "false",
   announceOnRequestCreated: "true",
   announceOnAvailable: "true",
@@ -61,7 +71,17 @@ function normalizeBotConfig(input) {
     reportsChannelId: normalizeId(source.reportsChannelId),
     jellyfinNowPlayingChannelId: normalizeId(source.jellyfinNowPlayingChannelId),
     jellyfinStatsChannelId: normalizeId(source.jellyfinStatsChannelId),
+    newMoviesChannelId: normalizeId(source.newMoviesChannelId),
+    newShowsChannelId: normalizeId(source.newShowsChannelId),
+    newEpisodesChannelId: normalizeId(source.newEpisodesChannelId),
+    generalChannelId: normalizeId(source.generalChannelId),
+    welcomeChannelId: normalizeId(source.welcomeChannelId),
+    suggestionsChannelId: normalizeId(source.suggestionsChannelId),
+    cuttingBoardChannelId: normalizeId(source.cuttingBoardChannelId),
+    botTestingChannelId: normalizeId(source.botTestingChannelId),
     requestRoleId: normalizeId(source.requestRoleId),
+    adminRoleId: normalizeId(source.adminRoleId),
+    defaultMemberRoleId: normalizeId(source.defaultMemberRoleId),
     enforceRequestChannel: asBoolString(source.enforceRequestChannel, DEFAULT_BOT_CONFIG.enforceRequestChannel),
     announceOnRequestCreated: asBoolString(source.announceOnRequestCreated, DEFAULT_BOT_CONFIG.announceOnRequestCreated),
     announceOnAvailable: asBoolString(source.announceOnAvailable, DEFAULT_BOT_CONFIG.announceOnAvailable),
@@ -573,6 +593,61 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot }) {
       res.json({ count: items.length, items });
     } catch (error) {
       next(new Error(`Jellyfin latest failed: ${error.message}`));
+    }
+  });
+
+  router.get("/jellyfin/stats", async (req, res, next) => {
+    try {
+      const stats = await jellyfin.getUsageStats();
+      res.json({ ok: true, ...stats });
+    } catch (error) {
+      next(new Error(`Jellyfin stats failed: ${error.message}`));
+    }
+  });
+
+  router.get("/jellyfin/now-playing", async (req, res, next) => {
+    try {
+      const data = await jellyfin.getNowPlaying();
+      res.json({ ok: true, activeSessions: data.activeSessions, nowPlaying: data.nowPlaying });
+    } catch (error) {
+      next(new Error(`Jellyfin now-playing failed: ${error.message}`));
+    }
+  });
+
+  router.get("/jellyfin/libraries", async (req, res, next) => {
+    try {
+      const libraries = await jellyfin.getLibrarySections();
+      res.json({ ok: true, libraries });
+    } catch (error) {
+      next(new Error(`Jellyfin libraries failed: ${error.message}`));
+    }
+  });
+
+  router.get("/seerr/issues", async (req, res, next) => {
+    try {
+      const issues = await overseerr.getRecentIssues(50);
+      res.json({ ok: true, issues });
+    } catch (error) {
+      next(new Error(`Overseerr issues failed: ${error.message}`));
+    }
+  });
+
+  router.post("/seerr/issues/:id/comment", async (req, res, next) => {
+    try {
+      const issueId = Number(req.params.id);
+      const message = String(req.body?.message || "").trim();
+
+      if (!Number.isInteger(issueId) || issueId <= 0) {
+        return res.status(400).json({ error: "Invalid issue ID." });
+      }
+      if (!message) {
+        return res.status(400).json({ error: "Message cannot be empty." });
+      }
+
+      const result = await overseerr.createIssueComment(issueId, message);
+      return res.json({ ok: true, result });
+    } catch (error) {
+      next(error);
     }
   });
 

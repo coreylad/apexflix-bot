@@ -1,13 +1,13 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ApexFlix Community Hub</title>
+    <title>ApexFlix â€” Media Server Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Manrope:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -15,315 +15,649 @@
   <body>
     <div class="bg-orb orb-1"></div>
     <div class="bg-orb orb-2"></div>
+    <div class="bg-orb orb-3"></div>
 
-    <main class="layout">
-      <header class="hero card">
-        <p class="label">ApexFlix</p>
-        <h1>Community Media Control Center</h1>
-        <p>
-          One Node service powering Discord commands, Overseerr request workflows,
-          Jellyfin updates, and a browser dashboard.
-        </p>
-      </header>
-
-      <section id="setupPanel" class="card auth-card hidden">
+    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• SETUP SCREEN â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <div id="setupScreen" class="auth-wrap hidden">
+      <div class="auth-box">
+        <div class="brand">
+          <div class="brand-icon">A</div>
+          <span class="brand-name">ApexFlix</span>
+        </div>
         <h2>First-Run Setup</h2>
-        <p class="muted">
-          Create the first admin user and save your app configuration without editing files.
-        </p>
-        <form id="setupForm">
-          <label>
-            Admin Username
-            <input name="username" type="text" autocomplete="username" required />
-          </label>
-          <label>
-            Admin Password
-            <input name="password" type="password" autocomplete="new-password" minlength="8" required />
-          </label>
-          <label>
-            Confirm Password
-            <input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required />
-          </label>
-          <div id="setupEnvForm" class="settings-form"></div>
-          <button type="submit">Create Admin And Save Configuration</button>
+        <p class="sub">Create your admin account and configure API credentials.</p>
+        <form id="setupForm" class="auth-form">
+          <label>Admin Username <input name="username" type="text" autocomplete="username" required placeholder="admin" /></label>
+          <label>Admin Password <input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="min. 8 characters" /></label>
+          <label>Confirm Password <input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required placeholder="repeat password" /></label>
+          <hr class="divider" />
+          <div id="setupEnvForm"></div>
+          <button type="submit" class="btn-primary">Create Account &amp; Save Config</button>
         </form>
-        <p id="setupResult"></p>
-      </section>
+        <div id="setupMsg" class="msg"></div>
+      </div>
+    </div>
 
-      <section id="loginPanel" class="card auth-card hidden">
-        <h2>Private Login</h2>
-        <p class="muted">Sign in with the admin account created during first-run setup.</p>
-        <form id="loginForm">
-          <label>
-            Username
-            <input name="username" type="text" autocomplete="username" required />
-          </label>
-          <label>
-            Password
-            <input name="password" type="password" autocomplete="current-password" required />
-          </label>
-          <button type="submit">Sign In</button>
+    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGIN SCREEN â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <div id="loginScreen" class="auth-wrap hidden">
+      <div class="auth-box">
+        <div class="brand">
+          <div class="brand-icon">A</div>
+          <span class="brand-name">ApexFlix</span>
+        </div>
+        <h2>Welcome back</h2>
+        <p class="sub">Sign in to access the media server dashboard.</p>
+        <form id="loginForm" class="auth-form">
+          <label>Username <input name="username" type="text" autocomplete="username" required /></label>
+          <label>Password <input name="password" type="password" autocomplete="current-password" required /></label>
+          <button type="submit" class="btn-primary">Sign In</button>
         </form>
-        <p id="loginResult"></p>
-      </section>
+        <div id="loginMsg" class="msg"></div>
+      </div>
+    </div>
 
-      <section id="dashboardPanel" class="grid hidden">
-        <article class="card admin-bar">
-          <h2>Admin Session</h2>
-          <p class="muted"><span id="sessionUser"></span></p>
-          <div class="admin-actions">
-            <button id="logoutBtn" type="button">Logout</button>
+    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• APP SHELL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <div id="appShell" class="app-shell hidden">
+
+      <!-- â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-brand">
+            <div class="brand-icon">A</div>
+            <span class="brand-name">ApexFlix</span>
           </div>
-        </article>
+          <div class="sidebar-meta">Media Server Dashboard</div>
+        </div>
 
-        <article class="card">
-          <h2>Service Health</h2>
-          <pre id="health">Loading...</pre>
-        </article>
+        <div class="sidebar-user">
+          <div class="user-dot"></div>
+          <span id="sidebarUser">admin</span>
+        </div>
 
-        <article class="card">
-          <h2>Recent Requests</h2>
-          <div class="admin-actions">
-            <button id="backfillRequestsBtn" type="button">Backfill Request Data</button>
+        <div class="sidebar-nav">
+          <div class="nav-section-label">Overview</div>
+          <button class="nav-btn active" data-tab="tabDashboard">
+            <span class="nav-icon">â¬¡</span> Dashboard
+          </button>
+
+          <div class="nav-section-label">Media</div>
+          <button class="nav-btn" data-tab="tabRequests">
+            <span class="nav-icon">ðŸ“‹</span> Requests
+            <span class="nav-badge" id="badgeRequests"></span>
+          </button>
+          <button class="nav-btn" data-tab="tabJellyfin">
+            <span class="nav-icon">ðŸŽ¬</span> Jellyfin
+          </button>
+          <button class="nav-btn" data-tab="tabReports">
+            <span class="nav-icon">ðŸš¨</span> Reports
+            <span class="nav-badge" id="badgeReports"></span>
+          </button>
+
+          <div class="nav-section-label">Configuration</div>
+          <button class="nav-btn" data-tab="tabBotConfig">
+            <span class="nav-icon">ðŸ¤–</span> Bot Config
+          </button>
+          <button class="nav-btn" data-tab="tabChannels">
+            <span class="nav-icon">ðŸ“¡</span> Channels
+          </button>
+          <button class="nav-btn" data-tab="tabEnvironment">
+            <span class="nav-icon">âš™ï¸</span> Environment
+          </button>
+
+          <div class="nav-section-label">Admin</div>
+          <button class="nav-btn" data-tab="tabSystem">
+            <span class="nav-icon">ðŸ–¥ï¸</span> System
+          </button>
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="nav-btn btn-danger" id="logoutBtn">
+            <span class="nav-icon">â†©</span> Logout
+          </button>
+        </div>
+      </nav>
+
+      <!-- â”€â”€ Main Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <div class="main-content">
+        <div class="top-bar">
+          <span class="top-bar-title" id="topBarTitle">Dashboard</span>
+          <div class="top-bar-right">
+            <span class="status-pill unknown" id="pillBot"><span class="status-pill-dot"></span> Bot</span>
+            <span class="status-pill unknown" id="pillJellyfin"><span class="status-pill-dot"></span> Jellyfin</span>
+            <span class="status-pill unknown" id="pillOverseerr"><span class="status-pill-dot"></span> Overseerr</span>
           </div>
-          <ul id="requests" class="list"></ul>
-          <p id="backfillResult"></p>
-        </article>
+        </div>
 
-        <article class="card">
-          <h2>Latest Jellyfin Items</h2>
-          <ul id="latest" class="list"></ul>
-        </article>
+        <!-- â”€â”€â”€ TAB: Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabDashboard" class="tab-pane active">
+          <p class="pane-title">Dashboard</p>
+          <p class="pane-sub">Live overview of your media server and bot activity.</p>
 
-        <article class="card request-form-card">
-          <h2>Quick Web Request</h2>
-          <form id="requestForm">
-            <label>
-              Media Type
-              <select name="mediaType" required>
-                <option value="movie">Movie</option>
-                <option value="tv">TV</option>
-              </select>
-            </label>
-
-            <label>
-              TMDB Media ID
-              <input type="number" name="mediaId" min="1" required />
-            </label>
-
-            <button type="submit">Submit Request</button>
-          </form>
-          <p id="requestResult"></p>
-        </article>
-
-        <article class="card env-card">
-          <h2>.env Editor</h2>
-          <p class="muted">Save app credentials and runtime settings directly from the browser.</p>
-          <form id="envForm" class="settings-form"></form>
-          <div class="admin-actions">
-            <button id="saveEnvBtn" type="button">Save Environment</button>
+          <div class="grid-4" style="margin-bottom:1rem">
+            <div class="stat-card">
+              <div class="stat-label">Movies</div>
+              <div class="stat-value blue" id="statMovies">â€”</div>
+              <div class="stat-sub">in Jellyfin library</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Series</div>
+              <div class="stat-value purple" id="statSeries">â€”</div>
+              <div class="stat-sub">in Jellyfin library</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Episodes</div>
+              <div class="stat-value accent" id="statEpisodes">â€”</div>
+              <div class="stat-sub">total episodes</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Active Streams</div>
+              <div class="stat-value green" id="statStreams">â€”</div>
+              <div class="stat-sub">right now</div>
+            </div>
           </div>
-          <p id="envResult"></p>
-        </article>
 
-        <article class="card env-card">
-          <h2>Discord Bot Config</h2>
-          <p class="muted">
-            Route request events to specific channels and control announcements, DM behavior, and
-            request-channel enforcement.
-          </p>
-          <form id="botConfigForm" class="settings-form">
-            <section class="settings-group">
-              <h3>Channels</h3>
-              <div class="settings-group-grid">
-                <label>
-                  Requests Channel ID
-                  <input name="requestsChannelId" type="text" placeholder="123456789012345678" />
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">ðŸŽ® Now Playing</div>
+                  <div class="card-subtitle">Live Jellyfin sessions</div>
+                </div>
+                <button class="btn-secondary btn-sm" id="dashRefreshNowPlaying">Refresh</button>
+              </div>
+              <div id="dashNowPlaying">
+                <div class="empty-state"><div class="empty-icon">ðŸ“º</div>No active playback</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">ðŸ†• Recently Added</div>
+                  <div class="card-subtitle">Latest items in Jellyfin</div>
+                </div>
+                <button class="btn-secondary btn-sm" id="dashRefreshLatest">Refresh</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Title</th><th>Type</th><th>Year</th></tr></thead>
+                  <tbody id="dashLatest"><tr><td colspan="3" class="empty-state">Loadingâ€¦</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card col-span-2">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">ðŸ“‹ Recent Requests</div>
+                  <div class="card-subtitle">Latest Overseerr activity</div>
+                </div>
+                <div style="display:flex;gap:0.5rem">
+                  <button class="btn-secondary btn-sm" id="dashRefreshRequests">Refresh</button>
+                  <button class="btn-orange btn-sm" id="dashBackfillBtn">Backfill from Seerr</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>#</th><th>Title</th><th>Type</th><th>Status</th><th>Updated</th></tr></thead>
+                  <tbody id="dashRequests"><tr><td colspan="5" class="empty-state">Loadingâ€¦</td></tr></tbody>
+                </table>
+              </div>
+              <div id="dashBackfillMsg" class="msg"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- â”€â”€â”€ TAB: Requests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabRequests" class="tab-pane">
+          <p class="pane-title">Requests</p>
+          <p class="pane-sub">Submit and track Overseerr media requests.</p>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Submit a Request</div>
+                  <div class="card-subtitle">Send directly to Overseerr via the web UI</div>
+                </div>
+              </div>
+              <form id="requestForm" style="display:grid;gap:0.9rem">
+                <label>Media Type
+                  <select name="mediaType">
+                    <option value="movie">ðŸŽ¬ Movie</option>
+                    <option value="tv">ðŸ“º TV Series</option>
+                  </select>
                 </label>
-                <label>
-                  Uploads Channel ID
-                  <input name="uploadsChannelId" type="text" placeholder="123456789012345678" />
+                <label>TMDB ID or URL
+                  <input type="text" name="mediaId" placeholder="e.g. 1399 or https://www.themoviedb.org/tv/1399" />
                 </label>
-                <label>
-                  Status Updates Channel ID
-                  <input name="updatesChannelId" type="text" placeholder="123456789012345678" />
+                <label>Season (TV only â€” 1, all, latest)
+                  <input type="text" name="season" placeholder="Leave blank for movies" />
                 </label>
-                <label>
-                  News Channel ID
-                  <input name="newsChannelId" type="text" placeholder="123456789012345678" />
+                <button type="submit" class="btn-primary">Submit Request</button>
+              </form>
+              <div id="requestMsg" class="msg"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">All Requests</div>
+                  <div class="card-subtitle">Tracked in local database</div>
+                </div>
+                <button class="btn-secondary btn-sm" id="reqRefreshBtn">Refresh</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>#</th><th>Title</th><th>Type</th><th>Status</th></tr></thead>
+                  <tbody id="reqTableBody"><tr><td colspan="4" class="empty-state">Loadingâ€¦</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- â”€â”€â”€ TAB: Jellyfin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabJellyfin" class="tab-pane">
+          <p class="pane-title">Jellyfin</p>
+          <p class="pane-sub">Live library stats, now playing, and manual snapshot publishing.</p>
+
+          <div class="grid-4" style="margin-bottom:1rem">
+            <div class="stat-card">
+              <div class="stat-label">Movies</div>
+              <div class="stat-value blue" id="jellyMovies">â€”</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Series</div>
+              <div class="stat-value purple" id="jellySeries">â€”</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Episodes</div>
+              <div class="stat-value accent" id="jellyEpisodes">â€”</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Songs</div>
+              <div class="stat-value orange" id="jellySongs">â€”</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">â–¶ Now Playing</div>
+                  <div class="card-subtitle">Current active sessions</div>
+                </div>
+                <div style="display:flex;gap:0.5rem">
+                  <button class="btn-secondary btn-sm" id="jellyRefreshNP">Refresh</button>
+                  <button class="btn-blue btn-sm" id="publishNowPlayingBtn">ðŸ“¤ Publish to Discord</button>
+                </div>
+              </div>
+              <div id="jellyNowPlaying">
+                <div class="empty-state"><div class="empty-icon">ðŸ“º</div>No active playback</div>
+              </div>
+              <div id="jellyNPMsg" class="msg"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">ðŸ“š Library Sections</div>
+                  <div class="card-subtitle">Jellyfin media libraries</div>
+                </div>
+                <button class="btn-secondary btn-sm" id="jellyRefreshLibs">Refresh</button>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>Library</th><th>Type</th><th>Paths</th></tr></thead>
+                  <tbody id="jellyLibsBody"><tr><td colspan="3" class="empty-state">Loadingâ€¦</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card col-span-2">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">ðŸ“Š Stats Snapshot</div>
+                  <div class="card-subtitle">Library totals and activity summary</div>
+                </div>
+                <button class="btn-purple btn-sm" id="publishJellyStatsBtn">ðŸ“¤ Publish to Discord</button>
+              </div>
+              <div class="grid-4" id="jellyStatsGrid">
+                <div class="stat-card"><div class="stat-label">Played Items</div><div class="stat-value green" id="jellyPlayed">â€”</div></div>
+                <div class="stat-card"><div class="stat-label">Active Streams</div><div class="stat-value accent" id="jellyActive">â€”</div></div>
+              </div>
+              <div id="jellyStatsMsg" class="msg"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- â”€â”€â”€ TAB: Reports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabReports" class="tab-pane">
+          <p class="pane-title">Reports</p>
+          <p class="pane-sub">Issues raised in Overseerr, posted automatically to your reports channel.</p>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">ðŸš¨ Overseerr Issues</div>
+                <div class="card-subtitle">Latest reported problems from your users</div>
+              </div>
+              <button class="btn-secondary btn-sm" id="reportsRefreshBtn">Refresh</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Subject</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Comments</th>
+                    <th>Raised</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="reportsTableBody">
+                  <tr><td colspan="7" class="empty-state">Loadingâ€¦</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card gap-top">
+            <div class="card-header">
+              <div>
+                <div class="card-title">ðŸ’¬ Post a Comment</div>
+                <div class="card-subtitle">Reply to an issue directly from the dashboard</div>
+              </div>
+            </div>
+            <div class="settings-grid">
+              <label>Issue ID <input type="number" id="respondIssueId" placeholder="e.g. 42" min="1" /></label>
+              <label>Message <input type="text" id="respondMessage" placeholder="Your replyâ€¦" /></label>
+            </div>
+            <div class="btn-row">
+              <button class="btn-primary" id="respondSubmitBtn">Post Comment</button>
+            </div>
+            <div id="respondMsg" class="msg"></div>
+          </div>
+        </div>
+
+        <!-- â”€â”€â”€ TAB: Bot Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabBotConfig" class="tab-pane">
+          <p class="pane-title">Bot Configuration</p>
+          <p class="pane-sub">Control automation flags, announcement behaviour, daily news, and message templates.</p>
+
+          <form id="botConfigForm">
+            <div class="settings-section">
+              <div class="settings-title">âš¡ Automation</div>
+              <div class="check-group grid-2">
+                <label class="check-item">
+                  <input type="checkbox" name="announceOnRequestCreated" />
+                  <div class="check-item-body">
+                    <span class="check-item-label">Announce new requests</span>
+                    <span class="check-item-hint">Post to Requests channel when /request is used</span>
+                  </div>
                 </label>
-                <label>
-                  Reports Channel ID
-                  <input name="reportsChannelId" type="text" placeholder="123456789012345678" />
+                <label class="check-item">
+                  <input type="checkbox" name="announceOnAvailable" />
+                  <div class="check-item-body">
+                    <span class="check-item-label">Announce when available</span>
+                    <span class="check-item-hint">Post to Uploads channel when media is ready</span>
+                  </div>
                 </label>
-                <label>
-                  Jellyfin Now Playing Channel ID
-                  <input name="jellyfinNowPlayingChannelId" type="text" placeholder="123456789012345678" />
+                <label class="check-item">
+                  <input type="checkbox" name="announceOnAnyStatus" />
+                  <div class="check-item-body">
+                    <span class="check-item-label">Announce every status change</span>
+                    <span class="check-item-hint">Post to Updates channel on every Seerr transition</span>
+                  </div>
                 </label>
-                <label>
-                  Jellyfin Stats Channel ID
-                  <input name="jellyfinStatsChannelId" type="text" placeholder="123456789012345678" />
+                <label class="check-item">
+                  <input type="checkbox" name="enforceRequestChannel" />
+                  <div class="check-item-body">
+                    <span class="check-item-label">Restrict /request to one channel</span>
+                    <span class="check-item-hint">Reject /request commands outside the requests channel</span>
+                  </div>
                 </label>
-                <label>
-                  Request Role ID (optional ping)
-                  <input name="requestRoleId" type="text" placeholder="123456789012345678" />
+                <label class="check-item">
+                  <input type="checkbox" name="mentionRequesterInChannel" />
+                  <div class="check-item-body">
+                    <span class="check-item-label">Mention requester in announcements</span>
+                    <span class="check-item-hint">@-ping the user in channel messages</span>
+                  </div>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" name="dmOnStatusChange" />
+                  <div class="check-item-body">
+                    <span class="check-item-label">DM on status change</span>
+                    <span class="check-item-hint">Send linked users a DM on request updates</span>
+                  </div>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" name="useRichEmbeds" />
+                  <div class="check-item-body">
+                    <span class="check-item-label">Use rich embeds</span>
+                    <span class="check-item-hint">Use Discord embed format instead of plain text</span>
+                  </div>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" name="dailyNewsEnabled" />
+                  <div class="check-item-body">
+                    <span class="check-item-label">Enable daily news report</span>
+                    <span class="check-item-hint">Auto-post a daily digest to the News channel</span>
+                  </div>
                 </label>
               </div>
-            </section>
+            </div>
 
-            <section class="settings-group">
-              <h3>Automation Flags</h3>
-              <div class="settings-group-grid checkbox-grid">
-                <label class="check-label">
-                  <input name="enforceRequestChannel" type="checkbox" />
-                  Force /request in Requests channel only
-                </label>
-                <label class="check-label">
-                  <input name="announceOnRequestCreated" type="checkbox" />
-                  Announce newly created requests
-                </label>
-                <label class="check-label">
-                  <input name="announceOnAvailable" type="checkbox" />
-                  Announce when media becomes available
-                </label>
-                <label class="check-label">
-                  <input name="announceOnAnyStatus" type="checkbox" />
-                  Announce every status transition
-                </label>
-                <label class="check-label">
-                  <input name="dailyNewsEnabled" type="checkbox" />
-                  Send daily news report automatically
-                </label>
-                <label class="check-label">
-                  <input name="dmOnStatusChange" type="checkbox" />
-                  DM linked users on status changes
-                </label>
-                <label class="check-label">
-                  <input name="mentionRequesterInChannel" type="checkbox" />
-                  Mention requester in channel announcements
-                </label>
-                <label class="check-label">
-                  <input name="useRichEmbeds" type="checkbox" />
-                  Use rich embeds for bot announcements
-                </label>
-              </div>
-            </section>
-
-            <section class="settings-group">
-              <h3>Daily News Scheduler</h3>
-              <p class="muted small-muted">
-                Runs once per day at the selected local server hour. Report includes recently available Seerr items and privacy-safe Jellyfin aggregate stats.
-              </p>
-              <div class="settings-group-grid">
-                <label>
-                  Daily News Hour (0-23, local server time)
+            <div class="settings-section">
+              <div class="settings-title">ðŸ“° Daily News Scheduler</div>
+              <div class="settings-grid">
+                <label>Send Hour (0â€“23, server local time)
                   <input name="dailyNewsHourLocal" type="number" min="0" max="23" placeholder="9" />
                 </label>
               </div>
-            </section>
+              <div class="btn-row">
+                <button type="button" class="btn-secondary" id="sendDailyNewsBtn">ðŸ“° Send Daily News Now</button>
+              </div>
+              <div id="dailyNewsMsg" class="msg"></div>
+            </div>
 
-            <section class="settings-group">
-              <h3>Seerr-Style Templates</h3>
-              <p class="muted small-muted">
-                Use variables like {{event}}, {{subject}}, {{media_type}}, {{request_id}},
-                {{requestedBy_username}}, {{requestedBy_settings_discordId}}.
+            <div class="settings-section">
+              <div class="settings-title">ðŸ“ Announcement Templates</div>
+              <p class="text-sm muted" style="margin-bottom:0.8rem">
+                Available variables: <code>{{event}}</code> <code>{{subject}}</code> <code>{{media_type}}</code>
+                <code>{{request_id}}</code> <code>{{media_status}}</code> <code>{{requestedBy_username}}</code>
+                <code>{{requestedBy_settings_discordId}}</code>
               </p>
-              <div class="settings-group-grid one-col">
-                <label>
-                  Request Created Template
+              <div class="settings-grid one-col">
+                <label>Request Created Template
                   <textarea name="requestAnnouncementTemplate" rows="4"></textarea>
                 </label>
-                <label>
-                  Available Upload Template
+                <label>Available / Upload Template
                   <textarea name="availableAnnouncementTemplate" rows="4"></textarea>
                 </label>
-                <label>
-                  Status Update Template
+                <label>Status Update Template
                   <textarea name="statusAnnouncementTemplate" rows="4"></textarea>
                 </label>
               </div>
-            </section>
+            </div>
           </form>
-          <div class="admin-actions">
-            <button id="saveBotConfigBtn" type="button">Save Bot Config</button>
-            <button id="sendDailyNewsBtn" type="button">Send Daily News Now</button>
-          </div>
-          <p id="botConfigResult"></p>
-          <p id="dailyNewsResult"></p>
-          <p id="jellyfinPublishResult"></p>
-          <div class="admin-actions">
-            <button id="publishNowPlayingBtn" type="button">Publish Now Playing Snapshot</button>
-            <button id="publishJellyStatsBtn" type="button">Publish Jellyfin Stats Snapshot</button>
-          </div>
-        </article>
 
-        <article class="card env-card">
-          <h2>Systemd Deploy Helper (Linux)</h2>
-          <p class="muted">
-            Generates a systemd unit file and prints manual deploy commands. This does not restart services from the web UI to avoid port conflicts.
-          </p>
-          <form id="systemdForm" class="settings-form">
-            <section class="settings-group">
-              <h3>Service Settings</h3>
-              <div class="settings-group-grid">
-                <label>
-                  Service Name
-                  <input name="serviceName" type="text" value="apexflix" />
+          <div class="btn-row">
+            <button class="btn-primary" id="saveBotConfigBtn">Save Bot Config</button>
+          </div>
+          <div id="botConfigMsg" class="msg"></div>
+        </div>
+
+        <!-- â”€â”€â”€ TAB: Channels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabChannels" class="tab-pane">
+          <p class="pane-title">Channel &amp; Role Mapping</p>
+          <p class="pane-sub">Map Discord channel and role IDs to each bot feature. Right-click a channel in Discord â†’ Copy ID.</p>
+
+          <form id="channelsForm">
+            <div class="settings-section">
+              <div class="settings-title">ðŸ“¢ Announcement Channels</div>
+              <div class="settings-grid">
+                <label>Requests Channel
+                  <input name="requestsChannelId" type="text" placeholder="123456789012345678" />
                 </label>
-                <label>
-                  Linux User
-                  <input name="serviceUser" type="text" placeholder="apexflix" />
+                <label>Uploads / Available Channel
+                  <input name="uploadsChannelId" type="text" placeholder="123456789012345678" />
                 </label>
-                <label>
-                  Linux Group
-                  <input name="serviceGroup" type="text" placeholder="apexflix" />
+                <label>Status Updates Channel
+                  <input name="updatesChannelId" type="text" placeholder="123456789012345678" />
                 </label>
-                <label>
-                  Working Directory
-                  <input name="workingDirectory" type="text" placeholder="/opt/apexflix" />
+                <label>Daily News Channel
+                  <input name="newsChannelId" type="text" placeholder="auto-detects #news if blank" />
                 </label>
-                <label>
-                  ExecStart
-                  <input name="execStart" type="text" value="/usr/bin/npm start" />
-                </label>
-                <label>
-                  NODE_ENV
-                  <input name="nodeEnv" type="text" value="production" />
+                <label>Reports / Issues Channel
+                  <input name="reportsChannelId" type="text" placeholder="123456789012345678" />
                 </label>
               </div>
-            </section>
-          </form>
-          <div class="admin-actions">
-            <button id="generateSystemdBtn" type="button">Generate Unit And Deploy Instructions</button>
-          </div>
-          <p id="systemdResult"></p>
-          <section class="settings-group">
-            <h3>Deploy Commands</h3>
-            <pre id="systemdCommands" class="console-box">No commands generated yet.</pre>
-          </section>
-          <section class="settings-group">
-            <h3>Unit File Preview</h3>
-            <pre id="systemdUnitPreview" class="console-box">No unit generated yet.</pre>
-          </section>
-        </article>
+            </div>
 
-        <article class="card">
-          <h2>Change Admin Password</h2>
-          <form id="passwordForm">
-            <label>
-              Current Password
-              <input name="currentPassword" type="password" autocomplete="current-password" required />
-            </label>
-            <label>
-              New Password
-              <input name="newPassword" type="password" minlength="8" autocomplete="new-password" required />
-            </label>
-            <button type="submit">Update Password</button>
+            <div class="settings-section">
+              <div class="settings-title">ðŸŽ¬ Jellyfin Channels</div>
+              <div class="settings-grid">
+                <label>Now Playing Channel
+                  <input name="jellyfinNowPlayingChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>Stats Snapshot Channel
+                  <input name="jellyfinStatsChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>New Movies Channel
+                  <input name="newMoviesChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>New Shows Channel
+                  <input name="newShowsChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>New Episodes Channel
+                  <input name="newEpisodesChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-title">ðŸ‘¥ Community Channels</div>
+              <div class="settings-grid">
+                <label>General Channel
+                  <input name="generalChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>Welcome Channel
+                  <input name="welcomeChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>Suggestions Channel
+                  <input name="suggestionsChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>Cutting Board Channel
+                  <input name="cuttingBoardChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>Bot Testing Channel
+                  <input name="botTestingChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-title">ðŸŽ­ Roles</div>
+              <div class="settings-grid">
+                <label>Request Ping Role
+                  <input name="requestRoleId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>Admin Role ID
+                  <input name="adminRoleId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>Default Member Role ID
+                  <input name="defaultMemberRoleId" type="text" placeholder="123456789012345678" />
+                </label>
+              </div>
+            </div>
           </form>
-          <p id="passwordResult"></p>
-        </article>
-      </section>
-    </main>
+
+          <div class="btn-row">
+            <button class="btn-primary" id="saveChannelsBtn">Save Channels &amp; Roles</button>
+          </div>
+          <div id="channelsMsg" class="msg"></div>
+        </div>
+
+        <!-- â”€â”€â”€ TAB: Environment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabEnvironment" class="tab-pane">
+          <p class="pane-title">Environment Settings</p>
+          <p class="pane-sub">Edit API credentials and runtime settings. These are persisted to the .env file.</p>
+
+          <form id="envForm"></form>
+
+          <div class="btn-row">
+            <button class="btn-primary" id="saveEnvBtn">Save Environment</button>
+          </div>
+          <div id="envMsg" class="msg"></div>
+        </div>
+
+        <!-- â”€â”€â”€ TAB: System â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="tabSystem" class="tab-pane">
+          <p class="pane-title">System</p>
+          <p class="pane-sub">Service health, systemd deployment, and account management.</p>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">ðŸ©º Service Health</div>
+                  <div class="card-subtitle">Live status of all integrated services</div>
+                </div>
+                <button class="btn-secondary btn-sm" id="healthRefreshBtn">Refresh</button>
+              </div>
+              <pre id="healthBox" class="console-box">Loadingâ€¦</pre>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">ðŸ”‘ Change Password</div>
+                  <div class="card-subtitle">Update your admin account password</div>
+                </div>
+              </div>
+              <form id="passwordForm" style="display:grid;gap:0.9rem">
+                <label>Current Password <input name="currentPassword" type="password" autocomplete="current-password" required /></label>
+                <label>New Password <input name="newPassword" type="password" minlength="8" autocomplete="new-password" required /></label>
+                <button type="submit" class="btn-primary">Update Password</button>
+              </form>
+              <div id="passwordMsg" class="msg"></div>
+            </div>
+
+            <div class="card col-span-2">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">ðŸ§ Systemd Deploy Helper</div>
+                  <div class="card-subtitle">Generate a Linux systemd unit file and deploy commands</div>
+                </div>
+              </div>
+              <form id="systemdForm">
+                <div class="settings-grid three-col">
+                  <label>Service Name <input name="serviceName" type="text" value="apexflix" /></label>
+                  <label>Linux User <input name="serviceUser" type="text" placeholder="apexflix" /></label>
+                  <label>Linux Group <input name="serviceGroup" type="text" placeholder="apexflix" /></label>
+                  <label>Working Directory <input name="workingDirectory" type="text" placeholder="/opt/apexflix" /></label>
+                  <label>ExecStart <input name="execStart" type="text" value="/usr/bin/npm start" /></label>
+                  <label>NODE_ENV <input name="nodeEnv" type="text" value="production" /></label>
+                </div>
+              </form>
+              <div class="btn-row">
+                <button class="btn-secondary" id="generateSystemdBtn">Generate Unit File</button>
+              </div>
+              <div id="systemdMsg" class="msg"></div>
+              <p class="text-sm muted" style="margin-top:0.8rem">Deploy Commands</p>
+              <pre id="systemdCommands" class="console-box">Not yet generated.</pre>
+              <p class="text-sm muted" style="margin-top:0.8rem">Unit File Preview</p>
+              <pre id="systemdUnitPreview" class="console-box">Not yet generated.</pre>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /main-content -->
+    </div><!-- /app-shell -->
 
     <script src="app.js" defer></script>
   </body>

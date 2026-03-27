@@ -1,6 +1,11 @@
+/* ============================================================
+   ApexFlix — Media Server Dashboard  ·  app.js
+   ============================================================ */
+
+/* ─────────────────────────────────────── helpers ─────── */
 async function fetchJson(url, options) {
   const response = await fetch(url, options);
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || `Request failed: ${response.status}`);
   }
@@ -12,48 +17,66 @@ function escapeHtml(value) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
-function setMessage(id, text, isError = false) {
+/** type: 'ok' | 'err' | 'info' */
+function setMsg(id, text, type = "ok") {
   const el = document.getElementById(id);
+  if (!el) return;
   el.textContent = text || "";
-  el.style.color = isError ? "#ff6c77" : "#6ae3b9";
+  el.className = "msg" + (text ? ` ${type}` : "");
 }
 
-function renderList(element, items, formatter) {
-  if (!items || items.length === 0) {
-    element.innerHTML = "<li>No data yet.</li>";
-    return;
-  }
-
-  element.innerHTML = items.map(formatter).join("");
+function clearMsg(id) {
+  setMsg(id, "");
 }
 
-function showPanel(panelId) {
-  for (const id of ["setupPanel", "loginPanel", "dashboardPanel"]) {
-    const el = document.getElementById(id);
-    if (!el) {
-      continue;
-    }
-
-    if (id === panelId) {
-      el.classList.remove("hidden");
-    } else {
-      el.classList.add("hidden");
-    }
-  }
+function fmtDate(isoString) {
+  if (!isoString) return "—";
+  const d = new Date(isoString);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+/* ─────────────────────────────── status badge helpers ─── */
+const STATUS_LABELS = {
+  1: ["badge-muted", "Unknown"],
+  2: ["badge-blue", "Pending"],
+  3: ["badge-orange", "Processing"],
+  4: ["badge-teal", "Partial"],
+  5: ["badge-green", "Available"],
+  6: ["badge-red", "Declined"],
+  7: ["badge-purple", "Blocked"]
+};
+
+function statusBadge(code) {
+  const [cls, label] = STATUS_LABELS[Number(code)] || ["badge-muted", `#${code}`];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+const ISSUE_TYPE_LABELS = { 1: "Video", 2: "Audio", 3: "Subtitle", 4: "Other" };
+const ISSUE_STATUS_LABELS = {
+  1: ["badge-orange", "Open"],
+  2: ["badge-green", "Resolved"]
+};
+
+function issueTypeBadge(code) {
+  return `<span class="badge badge-blue">${ISSUE_TYPE_LABELS[Number(code)] || "Unknown"}</span>`;
+}
+
+function issueStatusBadge(code) {
+  const [cls, label] = ISSUE_STATUS_LABELS[Number(code)] || ["badge-muted", "Unknown"];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+/* ─────────────────────────────── env form renderer ───── */
 function renderEnvForm(targetId, allowedKeys, values) {
   const form = document.getElementById(targetId);
+  if (!form) return;
 
   const groups = [
-    {
-      title: "Discord",
-      keys: ["DISCORD_TOKEN", "DISCORD_CLIENT_ID", "DISCORD_GUILD_ID"]
-    },
+    { title: "Discord", keys: ["DISCORD_TOKEN", "DISCORD_CLIENT_ID", "DISCORD_GUILD_ID"] },
     {
       title: "Overseerr",
       keys: [
@@ -80,510 +103,803 @@ function renderEnvForm(targetId, allowedKeys, values) {
       ]
     },
     {
-      title: "App And Reverse Proxy",
+      title: "App & Reverse Proxy",
       keys: ["PORT", "REQUEST_STATUS_POLL_SECONDS", "LOG_LEVEL", "TRUST_PROXY", "APP_BASE_PATH"]
     }
   ];
 
-  const seen = new Set(groups.flatMap((group) => group.keys));
-  const extraKeys = allowedKeys.filter((key) => !seen.has(key));
-  if (extraKeys.length > 0) {
-    groups.push({ title: "Other", keys: extraKeys });
-  }
+  const seen = new Set(groups.flatMap((g) => g.keys));
+  const extras = (allowedKeys || []).filter((k) => !seen.has(k));
+  if (extras.length) groups.push({ title: "Other", keys: extras });
 
-  const allowedSet = new Set(allowedKeys);
+  const allowedSet = new Set(allowedKeys || []);
 
   form.innerHTML = groups
     .map((group) => {
-      const keys = group.keys.filter((key) => allowedSet.has(key));
-      if (keys.length === 0) {
-        return "";
-      }
-
+      const keys = group.keys.filter((k) => allowedSet.has(k));
+      if (!keys.length) return "";
       const fields = keys
         .map((key) => {
-          const safeValue = escapeHtml(values[key] || "");
-          const label =
-            key === "OVERSEERR_BASE_URL" || key === "JELLYFIN_BASE_URL"
-              ? `${key} (legacy)`
-              : key;
-          return `
-            <label>
-              ${label}
-              <input name="${key}" type="text" value="${safeValue}" />
-            </label>
-          `;
+          const safeVal = escapeHtml(values?.[key] || "");
+          const label = key.endsWith("BASE_URL") ? `${key} (legacy)` : key;
+          return `<label>${label}<input name="${key}" type="text" value="${safeVal}" /></label>`;
         })
         .join("");
-
-      return `
-        <section class="settings-group">
-          <h3>${group.title}</h3>
-          <div class="settings-group-grid">${fields}</div>
-        </section>
-      `;
+      return `<div class="settings-section"><div class="settings-title">${group.title}</div><div class="settings-grid">${fields}</div></div>`;
     })
     .join("");
 }
 
-async function loadHealth() {
-  const data = await fetchJson("api/health");
-  const box = document.getElementById("health");
-  box.textContent = JSON.stringify(data, null, 2);
-}
+/* ─────────────────────────────── tab router ──────────── */
+const TAB_TITLES = {
+  tabDashboard: "Dashboard",
+  tabRequests: "Requests",
+  tabJellyfin: "Jellyfin",
+  tabReports: "Reports",
+  tabBotConfig: "Bot Configuration",
+  tabChannels: "Channels & Roles",
+  tabEnvironment: "Environment",
+  tabSystem: "System"
+};
 
-async function loadRequests() {
-  const data = await fetchJson("api/requests/recent?limit=10");
-  const el = document.getElementById("requests");
+let activeTab = "tabDashboard";
 
-  renderList(
-    el,
-    data.rows,
-    (item) =>
-      `<li>#${item.request_id} ${item.title} - <strong>${item.status_text}</strong></li>`
+function switchTab(id) {
+  if (activeTab === id) return;
+  activeTab = id;
+
+  document.querySelectorAll(".nav-btn[data-tab]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.tab === id)
   );
-}
-
-async function loadLatest() {
-  const data = await fetchJson("api/jellyfin/latest?limit=10");
-  const el = document.getElementById("latest");
-
-  renderList(
-    el,
-    data.items,
-    (item) =>
-      `<li>${item.name} <span>(${item.type}${item.productionYear ? `, ${item.productionYear}` : ""})</span></li>`
+  document.querySelectorAll(".tab-pane").forEach((p) =>
+    p.classList.toggle("active", p.id === id)
   );
+
+  const titleEl = document.getElementById("topBarTitle");
+  if (titleEl) titleEl.textContent = TAB_TITLES[id] || id;
+
+  onTabActivated(id);
 }
 
-function wireForm() {
+function onTabActivated(id) {
+  switch (id) {
+    case "tabDashboard":
+      refreshDashboard();
+      break;
+    case "tabRequests":
+      loadRequestsTable();
+      break;
+    case "tabJellyfin":
+      loadJellyfinStats();
+      loadJellyfinNowPlaying();
+      loadJellyfinLibraries();
+      break;
+    case "tabReports":
+      loadReports();
+      break;
+    case "tabBotConfig":
+      loadBotConfig();
+      break;
+    case "tabChannels":
+      loadChannels();
+      break;
+    case "tabEnvironment":
+      loadEnvSettings();
+      break;
+    case "tabSystem":
+      loadHealth();
+      break;
+    default:
+      break;
+  }
+}
+
+/* ─────────────────────────────── status pills ────────── */
+async function updateStatusPills() {
+  const pill = (id, online) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = `status-pill ${online ? "online" : "offline"}`;
+  };
+
+  // Bot — server is responding = online
+  pill("pillBot", true);
+
+  try {
+    await fetchJson("api/jellyfin/stats");
+    pill("pillJellyfin", true);
+  } catch {
+    pill("pillJellyfin", false);
+  }
+
+  try {
+    await fetchJson("api/requests/recent?limit=1");
+    pill("pillOverseerr", true);
+  } catch {
+    pill("pillOverseerr", false);
+  }
+}
+
+/* ─────────────────────────────── dashboard ───────────── */
+async function refreshDashboard() {
+  loadDashboardStats();
+  loadDashboardNowPlaying();
+  loadDashboardLatest();
+  loadDashboardRequests();
+}
+
+async function loadDashboardStats() {
+  try {
+    const data = await fetchJson("api/jellyfin/stats");
+    document.getElementById("statMovies").textContent = data.movieCount ?? "—";
+    document.getElementById("statSeries").textContent = data.seriesCount ?? "—";
+    document.getElementById("statEpisodes").textContent = data.episodeCount ?? "—";
+    document.getElementById("statStreams").textContent = data.activeSessions ?? "—";
+  } catch {
+    ["statMovies", "statSeries", "statEpisodes", "statStreams"].forEach(
+      (id) => (document.getElementById(id).textContent = "—")
+    );
+  }
+}
+
+function renderNowPlayingHtml(nowPlaying) {
+  if (!nowPlaying?.length) {
+    return `<div class="empty-state"><div class="empty-icon">📺</div>No active playback</div>`;
+  }
+  return nowPlaying
+    .map((s) => {
+      const pct = Math.round(Number(s.playbackPercent || 0));
+      const pauseLabel = s.paused
+        ? `<span class="badge badge-orange">Paused</span>`
+        : `<span class="badge badge-green">Playing</span>`;
+      return `
+        <div class="session-row">
+          <div class="session-info">
+            <span class="session-title">${escapeHtml(s.name || "Unknown")}</span>
+            ${s.type ? `<span class="badge badge-blue">${escapeHtml(s.type)}</span>` : ""}
+            ${pauseLabel}
+            <span class="badge badge-muted">${escapeHtml(s.playMethod || "")}</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <div class="session-pct">${pct}%</div>
+        </div>`;
+    })
+    .join("");
+}
+
+async function loadDashboardNowPlaying() {
+  const el = document.getElementById("dashNowPlaying");
+  if (!el) return;
+  try {
+    const data = await fetchJson("api/jellyfin/now-playing");
+    el.innerHTML = renderNowPlayingHtml(data.nowPlaying);
+  } catch {
+    el.innerHTML = `<div class="empty-state">Could not load sessions</div>`;
+  }
+}
+
+async function loadDashboardLatest() {
+  const tbody = document.getElementById("dashLatest");
+  if (!tbody) return;
+  try {
+    const data = await fetchJson("api/jellyfin/latest?limit=8");
+    if (!data.items?.length) {
+      tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No items</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.items
+      .map(
+        (item) => `<tr>
+          <td>${escapeHtml(item.name || "—")}</td>
+          <td><span class="badge badge-blue">${escapeHtml(item.type || "—")}</span></td>
+          <td>${escapeHtml(String(item.productionYear || "—"))}</td>
+        </tr>`
+      )
+      .join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="3" class="empty-state">Failed to load</td></tr>`;
+  }
+}
+
+async function loadDashboardRequests() {
+  const tbody = document.getElementById("dashRequests");
+  const badge = document.getElementById("badgeRequests");
+  if (!tbody) return;
+  try {
+    const data = await fetchJson("api/requests/recent?limit=8");
+    const rows = data.rows || [];
+    if (badge) badge.textContent = rows.length ? String(rows.length) : "";
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No requests yet</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows
+      .map(
+        (r) => `<tr>
+          <td class="mono">#${r.request_id}</td>
+          <td>${escapeHtml(r.title || "—")}</td>
+          <td><span class="badge badge-purple">${escapeHtml(r.media_type || "—")}</span></td>
+          <td>${statusBadge(r.status_code)}</td>
+          <td class="muted-text">${fmtDate(r.updated_at)}</td>
+        </tr>`
+      )
+      .join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Failed to load</td></tr>`;
+  }
+}
+
+/* ─────────────────────────────── requests tab ────────── */
+async function loadRequestsTable() {
+  const tbody = document.getElementById("reqTableBody");
+  if (!tbody) return;
+  try {
+    const data = await fetchJson("api/requests/recent?limit=50");
+    const rows = data.rows || [];
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No requests found</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows
+      .map(
+        (r) => `<tr>
+          <td class="mono">#${r.request_id}</td>
+          <td>${escapeHtml(r.title || "—")}</td>
+          <td><span class="badge badge-purple">${escapeHtml(r.media_type || "—")}</span></td>
+          <td>${statusBadge(r.status_code)}</td>
+        </tr>`
+      )
+      .join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Failed to load</td></tr>`;
+  }
+}
+
+function wireRequestForm() {
   const form = document.getElementById("requestForm");
-  const result = document.getElementById("requestResult");
+  if (!form || form.dataset.wired) return;
+  form.dataset.wired = "1";
 
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearMsg("requestMsg");
+    const fd = new FormData(form);
+    const mediaType = String(fd.get("mediaType") || "movie");
+    const rawId = String(fd.get("mediaId") || "").trim();
+    const seasonInput = String(fd.get("season") || "").trim();
 
-    const formData = new FormData(form);
-    const payload = {
-      mediaType: String(formData.get("mediaType") || "movie"),
-      mediaId: Number(formData.get("mediaId"))
-    };
+    // Extract numeric TMDB ID from URL or plain number
+    const match = rawId.match(/(\d+)\/?$/);
+    const mediaId = match ? Number(match[1]) : NaN;
+
+    if (!mediaId || !Number.isInteger(mediaId) || mediaId <= 0) {
+      setMsg("requestMsg", "Enter a valid TMDB ID or TMDB URL.", "err");
+      return;
+    }
+
+    const payload = { mediaType, mediaId };
+    if (mediaType === "tv" && seasonInput) {
+      payload.season = seasonInput;
+    }
 
     try {
       const data = await fetchJson("api/request", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-
-      result.textContent = `Submitted ${data.title || "request"} with status ${data.statusText}`;
-      await loadRequests();
-    } catch (error) {
-      result.textContent = error.message;
-      result.style.color = "#ff6c77";
+      setMsg("requestMsg", `Submitted "${data.title || "request"}" — ${data.statusText || "pending"}`, "ok");
+      form.reset();
+      loadRequestsTable();
+    } catch (err) {
+      setMsg("requestMsg", err.message, "err");
     }
   });
 }
 
+/* ─────────────────────────────── jellyfin tab ────────── */
+async function loadJellyfinStats() {
+  try {
+    const data = await fetchJson("api/jellyfin/stats");
+    document.getElementById("jellyMovies").textContent = data.movieCount ?? "—";
+    document.getElementById("jellySeries").textContent = data.seriesCount ?? "—";
+    document.getElementById("jellyEpisodes").textContent = data.episodeCount ?? "—";
+    document.getElementById("jellySongs").textContent = data.songCount ?? "—";
+    document.getElementById("jellyPlayed").textContent = data.playedItemsCount ?? "—";
+    document.getElementById("jellyActive").textContent = data.activeSessions ?? "—";
+  } catch {
+    ["jellyMovies", "jellySeries", "jellyEpisodes", "jellySongs", "jellyPlayed", "jellyActive"].forEach(
+      (id) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = "—";
+      }
+    );
+  }
+}
+
+async function loadJellyfinNowPlaying() {
+  const el = document.getElementById("jellyNowPlaying");
+  if (!el) return;
+  try {
+    const data = await fetchJson("api/jellyfin/now-playing");
+    el.innerHTML = renderNowPlayingHtml(data.nowPlaying);
+  } catch {
+    el.innerHTML = `<div class="empty-state">Could not load sessions</div>`;
+  }
+}
+
+async function loadJellyfinLibraries() {
+  const tbody = document.getElementById("jellyLibsBody");
+  if (!tbody) return;
+  try {
+    const data = await fetchJson("api/jellyfin/libraries");
+    const libs = data.libraries || [];
+    if (!libs.length) {
+      tbody.innerHTML = `<tr><td colspan="3" class="empty-state">No libraries found</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = libs
+      .map(
+        (lib) => `<tr>
+          <td>${escapeHtml(lib.name)}</td>
+          <td><span class="badge badge-blue">${escapeHtml(lib.collectionType)}</span></td>
+          <td class="muted-text">${lib.pathCount} path${lib.pathCount !== 1 ? "s" : ""}</td>
+        </tr>`
+      )
+      .join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="3" class="empty-state">Failed to load</td></tr>`;
+  }
+}
+
+/* ─────────────────────────────── reports tab ─────────── */
+async function loadReports() {
+  const tbody = document.getElementById("reportsTableBody");
+  const badge = document.getElementById("badgeReports");
+  if (!tbody) return;
+  try {
+    const data = await fetchJson("api/seerr/issues");
+    const issues = data.issues || [];
+    if (badge) badge.textContent = issues.filter((i) => Number(i.status) === 1).length || "";
+    if (!issues.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No issues reported</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = issues
+      .map(
+        (i) => `<tr>
+          <td class="mono">#${i.id}</td>
+          <td>${escapeHtml(i.subject || "—")}</td>
+          <td>${issueTypeBadge(i.issueType)}</td>
+          <td>${issueStatusBadge(i.status)}</td>
+          <td class="muted-text">${i.commentCount ?? 0}</td>
+          <td class="muted-text">${fmtDate(i.createdAt)}</td>
+          <td><button class="btn-secondary btn-sm" onclick="quickFillIssue(${i.id})">Reply</button></td>
+        </tr>`
+      )
+      .join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function quickFillIssue(id) {
+  const el = document.getElementById("respondIssueId");
+  if (el) { el.value = id; }
+  document.getElementById("respondMessage")?.focus();
+}
+
+/* ─────────────────────────────── bot config ──────────── */
+const BOT_BOOL_FIELDS = [
+  "enforceRequestChannel",
+  "announceOnRequestCreated",
+  "announceOnAvailable",
+  "announceOnAnyStatus",
+  "dailyNewsEnabled",
+  "dmOnStatusChange",
+  "mentionRequesterInChannel",
+  "useRichEmbeds"
+];
+
+const BOT_TEXT_FIELDS = [
+  "dailyNewsHourLocal",
+  "requestAnnouncementTemplate",
+  "availableAnnouncementTemplate",
+  "statusAnnouncementTemplate"
+];
+
+const CHANNEL_FIELDS = [
+  "requestsChannelId",
+  "uploadsChannelId",
+  "updatesChannelId",
+  "newsChannelId",
+  "reportsChannelId",
+  "jellyfinNowPlayingChannelId",
+  "jellyfinStatsChannelId",
+  "newMoviesChannelId",
+  "newShowsChannelId",
+  "newEpisodesChannelId",
+  "generalChannelId",
+  "welcomeChannelId",
+  "suggestionsChannelId",
+  "cuttingBoardChannelId",
+  "botTestingChannelId",
+  "requestRoleId",
+  "adminRoleId",
+  "defaultMemberRoleId"
+];
+
+let _botConfigCache = {};
+
+async function loadBotConfig() {
+  try {
+    const data = await fetchJson("api/admin/bot-config");
+    _botConfigCache = data.values || {};
+    _populateBotConfigForm(_botConfigCache);
+  } catch (err) {
+    setMsg("botConfigMsg", `Failed to load: ${err.message}`, "err");
+  }
+}
+
+function _populateBotConfigForm(values) {
+  const form = document.getElementById("botConfigForm");
+  if (!form) return;
+  for (const name of BOT_TEXT_FIELDS) {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el) el.value = values[name] ?? "";
+  }
+  for (const name of BOT_BOOL_FIELDS) {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el) el.checked = String(values[name] ?? "false") === "true";
+  }
+}
+
+async function loadChannels() {
+  try {
+    const data = await fetchJson("api/admin/bot-config");
+    _botConfigCache = data.values || {};
+    _populateChannelsForm(_botConfigCache);
+  } catch (err) {
+    setMsg("channelsMsg", `Failed to load: ${err.message}`, "err");
+  }
+}
+
+function _populateChannelsForm(values) {
+  const form = document.getElementById("channelsForm");
+  if (!form) return;
+  for (const name of CHANNEL_FIELDS) {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el) el.value = values[name] ?? "";
+  }
+}
+
+function _collectAllValues() {
+  const values = { ..._botConfigCache };
+
+  const botForm = document.getElementById("botConfigForm");
+  if (botForm) {
+    for (const name of BOT_TEXT_FIELDS) {
+      const el = botForm.querySelector(`[name="${name}"]`);
+      if (el) values[name] = el.value;
+    }
+    for (const name of BOT_BOOL_FIELDS) {
+      const el = botForm.querySelector(`[name="${name}"]`);
+      if (el) values[name] = el.checked ? "true" : "false";
+    }
+  }
+
+  const chanForm = document.getElementById("channelsForm");
+  if (chanForm) {
+    for (const name of CHANNEL_FIELDS) {
+      const el = chanForm.querySelector(`[name="${name}"]`);
+      if (el) values[name] = el.value;
+    }
+  }
+
+  return values;
+}
+
+async function saveBotConfig() {
+  const values = _collectAllValues();
+  try {
+    const data = await fetchJson("api/admin/bot-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values })
+    });
+    _botConfigCache = data.values || values;
+    setMsg("botConfigMsg", "Bot configuration saved.", "ok");
+  } catch (err) {
+    setMsg("botConfigMsg", err.message, "err");
+  }
+}
+
+async function saveChannels() {
+  const values = _collectAllValues();
+  try {
+    const data = await fetchJson("api/admin/bot-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values })
+    });
+    _botConfigCache = data.values || values;
+    setMsg("channelsMsg", "Channels & roles saved.", "ok");
+  } catch (err) {
+    setMsg("channelsMsg", err.message, "err");
+  }
+}
+
+/* ─────────────────────────────── environment ─────────── */
 async function loadEnvSettings() {
-  const data = await fetchJson("api/admin/env");
-  renderEnvForm("envForm", data.allowedKeys, data.values);
+  try {
+    const data = await fetchJson("api/admin/env");
+    renderEnvForm("envForm", data.allowedKeys, data.values);
+  } catch (err) {
+    setMsg("envMsg", `Failed to load: ${err.message}`, "err");
+  }
 }
 
 async function saveEnvSettings() {
   const form = document.getElementById("envForm");
-  const fields = Array.from(form.querySelectorAll("input[name]"));
+  if (!form) return;
   const values = {};
-
-  for (const field of fields) {
-    values[field.name] = field.value;
+  for (const el of form.querySelectorAll("input[name]")) {
+    values[el.name] = el.value;
   }
-
-  const response = await fetchJson("api/admin/env", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ values })
-  });
-
-  setMessage("envResult", response.message || "Saved.");
-}
-
-async function loadBotConfig() {
-  const data = await fetchJson("api/admin/bot-config");
-  const form = document.getElementById("botConfigForm");
-
-  const textFields = [
-    "requestsChannelId",
-    "uploadsChannelId",
-    "updatesChannelId",
-    "newsChannelId",
-    "reportsChannelId",
-    "jellyfinNowPlayingChannelId",
-    "jellyfinStatsChannelId",
-    "requestRoleId",
-    "dailyNewsHourLocal",
-    "requestAnnouncementTemplate",
-    "availableAnnouncementTemplate",
-    "statusAnnouncementTemplate"
-  ];
-
-  const boolFields = [
-    "enforceRequestChannel",
-    "announceOnRequestCreated",
-    "announceOnAvailable",
-    "announceOnAnyStatus",
-    "dailyNewsEnabled",
-    "dmOnStatusChange",
-    "mentionRequesterInChannel",
-    "useRichEmbeds"
-  ];
-
-  for (const name of textFields) {
-    const el = form.querySelector(`[name="${name}"]`);
-    if (el) {
-      el.value = data.values[name] || "";
-    }
-  }
-
-  for (const name of boolFields) {
-    const el = form.querySelector(`[name="${name}"]`);
-    if (el) {
-      el.checked = String(data.values[name] || "false") === "true";
-    }
+  try {
+    const data = await fetchJson("api/admin/env", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values })
+    });
+    setMsg("envMsg", data.message || "Environment saved.", "ok");
+  } catch (err) {
+    setMsg("envMsg", err.message, "err");
   }
 }
 
-async function saveBotConfig() {
-  const form = document.getElementById("botConfigForm");
-  const values = {};
-
-  const textFields = [
-    "requestsChannelId",
-    "uploadsChannelId",
-    "updatesChannelId",
-    "newsChannelId",
-    "reportsChannelId",
-    "jellyfinNowPlayingChannelId",
-    "jellyfinStatsChannelId",
-    "requestRoleId",
-    "dailyNewsHourLocal",
-    "requestAnnouncementTemplate",
-    "availableAnnouncementTemplate",
-    "statusAnnouncementTemplate"
-  ];
-
-  const boolFields = [
-    "enforceRequestChannel",
-    "announceOnRequestCreated",
-    "announceOnAvailable",
-    "announceOnAnyStatus",
-    "dailyNewsEnabled",
-    "dmOnStatusChange",
-    "mentionRequesterInChannel",
-    "useRichEmbeds"
-  ];
-
-  for (const name of textFields) {
-    const el = form.querySelector(`[name="${name}"]`);
-    values[name] = el ? String(el.value || "").trim() : "";
+/* ─────────────────────────────── system ──────────────── */
+async function loadHealth() {
+  const box = document.getElementById("healthBox");
+  if (!box) return;
+  try {
+    const data = await fetchJson("api/health");
+    box.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    box.textContent = `Error: ${err.message}`;
   }
-
-  for (const name of boolFields) {
-    const el = form.querySelector(`[name="${name}"]`);
-    values[name] = el?.checked ? "true" : "false";
-  }
-
-  const response = await fetchJson("api/admin/bot-config", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ values })
-  });
-
-  setMessage("botConfigResult", response.message || "Bot config saved.");
-}
-
-async function backfillRequests() {
-  const response = await fetchJson("api/admin/requests/backfill", {
-    method: "POST"
-  });
-
-  setMessage("backfillResult", response.message || "Backfill complete.");
-  await loadRequests();
-}
-
-async function sendDailyNewsNow() {
-  const response = await fetchJson("api/admin/news/send", {
-    method: "POST"
-  });
-
-  setMessage("dailyNewsResult", response.message || "Daily news report sent.");
 }
 
 async function generateSystemdUnit() {
   const form = document.getElementById("systemdForm");
-  const formData = new FormData(form);
-
+  if (!form) return;
+  const fd = new FormData(form);
   const payload = {
-    serviceName: String(formData.get("serviceName") || "apexflix").trim(),
-    user: String(formData.get("serviceUser") || "").trim(),
-    group: String(formData.get("serviceGroup") || "").trim(),
-    workingDirectory: String(formData.get("workingDirectory") || "").trim(),
-    execStart: String(formData.get("execStart") || "").trim(),
-    nodeEnv: String(formData.get("nodeEnv") || "production").trim()
+    serviceName: String(fd.get("serviceName") || "apexflix").trim(),
+    user: String(fd.get("serviceUser") || "").trim(),
+    group: String(fd.get("serviceGroup") || "").trim(),
+    workingDirectory: String(fd.get("workingDirectory") || "").trim(),
+    execStart: String(fd.get("execStart") || "").trim(),
+    nodeEnv: String(fd.get("nodeEnv") || "production").trim()
   };
-
-  const response = await fetchJson("api/admin/systemd/deploy", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  setMessage("systemdResult", response.message || "Systemd unit generated.");
-
-  const commandsBox = document.getElementById("systemdCommands");
-  const unitBox = document.getElementById("systemdUnitPreview");
-
-  commandsBox.textContent = (response.recommendedManualCommands || []).join("\n");
-  unitBox.textContent = response.unit || "";
-}
-
-async function publishNowPlayingSnapshot() {
-  const response = await fetchJson("api/admin/jellyfin/publish-now-playing", {
-    method: "POST"
-  });
-
-  setMessage("jellyfinPublishResult", response.message || "Now playing snapshot sent.");
-}
-
-async function publishJellyfinStatsSnapshot() {
-  const response = await fetchJson("api/admin/jellyfin/publish-stats", {
-    method: "POST"
-  });
-
-  setMessage("jellyfinPublishResult", response.message || "Jellyfin stats snapshot sent.");
-}
-
-async function checkSession() {
   try {
-    const me = await fetchJson("api/auth/me");
-    return me.user;
-  } catch (error) {
-    return null;
+    const data = await fetchJson("api/admin/systemd/deploy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    setMsg("systemdMsg", data.message || "Generated.", "ok");
+    const cmds = document.getElementById("systemdCommands");
+    const unit = document.getElementById("systemdUnitPreview");
+    if (cmds) cmds.textContent = (data.recommendedManualCommands || []).join("\n");
+    if (unit) unit.textContent = data.unit || "";
+  } catch (err) {
+    setMsg("systemdMsg", err.message, "err");
   }
 }
 
-async function loadSetupStatus() {
-  return fetchJson("api/setup/status");
-}
+/* ─────────────────────────────── wire all ────────────── */
+function wireAll(user) {
+  const userEl = document.getElementById("sidebarUser");
+  if (userEl) userEl.textContent = user.username;
 
-async function showDashboard(user) {
-  showPanel("dashboardPanel");
-  document.getElementById("sessionUser").textContent = `Logged in as ${user.username}`;
+  // Tab navigation
+  document.querySelectorAll(".nav-btn[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
 
-  wireForm();
-  await Promise.all([loadHealth(), loadRequests(), loadLatest(), loadEnvSettings(), loadBotConfig()]);
+  // Logout
+  document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+    try { await fetchJson("api/auth/logout", { method: "POST" }); } finally { location.reload(); }
+  });
 
-  setInterval(() => {
-    loadRequests().catch(console.error);
-    loadLatest().catch(console.error);
-  }, 30000);
-}
+  // Dashboard
+  document.getElementById("dashRefreshNowPlaying")?.addEventListener("click", loadDashboardNowPlaying);
+  document.getElementById("dashRefreshLatest")?.addEventListener("click", loadDashboardLatest);
+  document.getElementById("dashRefreshRequests")?.addEventListener("click", loadDashboardRequests);
+  document.getElementById("dashBackfillBtn")?.addEventListener("click", async () => {
+    setMsg("dashBackfillMsg", "Running backfill…", "info");
+    try {
+      const data = await fetchJson("api/admin/requests/backfill", { method: "POST" });
+      setMsg("dashBackfillMsg", data.message || "Backfill complete.", "ok");
+      loadDashboardRequests();
+    } catch (err) { setMsg("dashBackfillMsg", err.message, "err"); }
+  });
 
-function wireAuth() {
-  const setupForm = document.getElementById("setupForm");
-  const loginForm = document.getElementById("loginForm");
-  const logoutBtn = document.getElementById("logoutBtn");
-  const saveEnvBtn = document.getElementById("saveEnvBtn");
-  const saveBotConfigBtn = document.getElementById("saveBotConfigBtn");
-  const sendDailyNewsBtn = document.getElementById("sendDailyNewsBtn");
-  const publishNowPlayingBtn = document.getElementById("publishNowPlayingBtn");
-  const publishJellyStatsBtn = document.getElementById("publishJellyStatsBtn");
-  const generateSystemdBtn = document.getElementById("generateSystemdBtn");
-  const backfillRequestsBtn = document.getElementById("backfillRequestsBtn");
-  const passwordForm = document.getElementById("passwordForm");
+  // Requests
+  wireRequestForm();
+  document.getElementById("reqRefreshBtn")?.addEventListener("click", loadRequestsTable);
 
-  setupForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  // Jellyfin
+  document.getElementById("jellyRefreshNP")?.addEventListener("click", loadJellyfinNowPlaying);
+  document.getElementById("jellyRefreshLibs")?.addEventListener("click", loadJellyfinLibraries);
+  document.getElementById("publishNowPlayingBtn")?.addEventListener("click", async () => {
+    setMsg("jellyNPMsg", "Publishing to Discord…", "info");
+    try {
+      const data = await fetchJson("api/admin/jellyfin/publish-now-playing", { method: "POST" });
+      setMsg("jellyNPMsg", data.message || "Now playing snapshot sent.", "ok");
+    } catch (err) { setMsg("jellyNPMsg", err.message, "err"); }
+  });
+  document.getElementById("publishJellyStatsBtn")?.addEventListener("click", async () => {
+    setMsg("jellyStatsMsg", "Publishing to Discord…", "info");
+    try {
+      const data = await fetchJson("api/admin/jellyfin/publish-stats", { method: "POST" });
+      setMsg("jellyStatsMsg", data.message || "Jellyfin stats snapshot sent.", "ok");
+    } catch (err) { setMsg("jellyStatsMsg", err.message, "err"); }
+  });
 
-    const formData = new FormData(setupForm);
-    const password = String(formData.get("password") || "");
-    const confirmPassword = String(formData.get("confirmPassword") || "");
-
-    if (password !== confirmPassword) {
-      setMessage("setupResult", "Passwords do not match.", true);
+  // Reports
+  document.getElementById("reportsRefreshBtn")?.addEventListener("click", loadReports);
+  document.getElementById("respondSubmitBtn")?.addEventListener("click", async () => {
+    clearMsg("respondMsg");
+    const issueId = Number(document.getElementById("respondIssueId")?.value || 0);
+    const message = String(document.getElementById("respondMessage")?.value || "").trim();
+    if (!issueId || !message) {
+      setMsg("respondMsg", "Issue ID and message are required.", "err");
       return;
     }
+    try {
+      await fetchJson(`api/seerr/issues/${issueId}/comment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+      });
+      setMsg("respondMsg", `Comment posted on issue #${issueId}.`, "ok");
+      const msgEl = document.getElementById("respondMessage");
+      if (msgEl) msgEl.value = "";
+      loadReports();
+    } catch (err) { setMsg("respondMsg", err.message, "err"); }
+  });
 
+  // Bot Config
+  document.getElementById("saveBotConfigBtn")?.addEventListener("click", saveBotConfig);
+  document.getElementById("sendDailyNewsBtn")?.addEventListener("click", async () => {
+    setMsg("dailyNewsMsg", "Sending…", "info");
+    try {
+      const data = await fetchJson("api/admin/news/send", { method: "POST" });
+      setMsg("dailyNewsMsg", data.message || "Daily news sent.", "ok");
+    } catch (err) { setMsg("dailyNewsMsg", err.message, "err"); }
+  });
+
+  // Channels
+  document.getElementById("saveChannelsBtn")?.addEventListener("click", saveChannels);
+
+  // Environment
+  document.getElementById("saveEnvBtn")?.addEventListener("click", saveEnvSettings);
+
+  // System
+  document.getElementById("healthRefreshBtn")?.addEventListener("click", loadHealth);
+  document.getElementById("generateSystemdBtn")?.addEventListener("click", generateSystemdUnit);
+  document.getElementById("passwordForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearMsg("passwordMsg");
+    const fd = new FormData(e.target);
+    try {
+      await fetchJson("api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: String(fd.get("currentPassword") || ""),
+          newPassword: String(fd.get("newPassword") || "")
+        })
+      });
+      setMsg("passwordMsg", "Password updated.", "ok");
+      e.target.reset();
+    } catch (err) { setMsg("passwordMsg", err.message, "err"); }
+  });
+
+  // Start live updates
+  updateStatusPills();
+  setInterval(updateStatusPills, 30000);
+  refreshDashboard();
+  setInterval(refreshDashboard, 60000);
+}
+
+/* ─────────────────────────────── auth screens ────────── */
+function wireSetupForm() {
+  document.getElementById("setupForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearMsg("setupMsg");
+    const fd = new FormData(e.target);
+    const password = String(fd.get("password") || "");
+    const confirm = String(fd.get("confirmPassword") || "");
+    if (password !== confirm) {
+      setMsg("setupMsg", "Passwords do not match.", "err");
+      return;
+    }
     const envValues = {};
-    for (const [key, value] of formData.entries()) {
+    for (const [key, val] of fd.entries()) {
       if (!["username", "password", "confirmPassword"].includes(key)) {
-        envValues[key] = String(value || "");
+        envValues[key] = String(val || "");
       }
     }
-
     try {
-      const response = await fetchJson("api/setup/initialize", {
+      const data = await fetchJson("api/setup/initialize", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: String(formData.get("username") || "").trim(),
+          username: String(fd.get("username") || "").trim(),
           password,
           values: envValues
         })
       });
-
-      setMessage(
-        "setupResult",
-        "First-run setup complete. Restart after changing Discord credentials if you filled them in now."
-      );
-      await showDashboard({ username: response.username });
-    } catch (error) {
-      setMessage("setupResult", error.message, true);
-    }
+      setMsg("setupMsg", "Setup complete. Reload after updating Discord credentials if you changed them.", "ok");
+      showApp({ username: data.username });
+    } catch (err) { setMsg("setupMsg", err.message, "err"); }
   });
+}
 
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const formData = new FormData(loginForm);
-
+function wireLoginForm() {
+  document.getElementById("loginForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearMsg("loginMsg");
+    const fd = new FormData(e.target);
     try {
       const data = await fetchJson("api/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: String(formData.get("username") || "").trim(),
-          password: String(formData.get("password") || "")
+          username: String(fd.get("username") || "").trim(),
+          password: String(fd.get("password") || "")
         })
       });
-
-      setMessage("loginResult", "Login successful.");
-      await showDashboard({ username: data.username });
-    } catch (error) {
-      setMessage("loginResult", error.message, true);
-    }
-  });
-
-  logoutBtn.addEventListener("click", async () => {
-    try {
-      await fetchJson("api/auth/logout", { method: "POST" });
-      location.reload();
-    } catch (error) {
-      alert(error.message);
-    }
-  });
-
-  saveEnvBtn.addEventListener("click", async () => {
-    try {
-      await saveEnvSettings();
-    } catch (error) {
-      setMessage("envResult", error.message, true);
-    }
-  });
-
-  saveBotConfigBtn.addEventListener("click", async () => {
-    try {
-      await saveBotConfig();
-    } catch (error) {
-      setMessage("botConfigResult", error.message, true);
-    }
-  });
-
-  sendDailyNewsBtn.addEventListener("click", async () => {
-    try {
-      await sendDailyNewsNow();
-    } catch (error) {
-      setMessage("dailyNewsResult", error.message, true);
-    }
-  });
-
-  publishNowPlayingBtn.addEventListener("click", async () => {
-    try {
-      await publishNowPlayingSnapshot();
-    } catch (error) {
-      setMessage("jellyfinPublishResult", error.message, true);
-    }
-  });
-
-  publishJellyStatsBtn.addEventListener("click", async () => {
-    try {
-      await publishJellyfinStatsSnapshot();
-    } catch (error) {
-      setMessage("jellyfinPublishResult", error.message, true);
-    }
-  });
-
-  generateSystemdBtn.addEventListener("click", async () => {
-    try {
-      await generateSystemdUnit();
-    } catch (error) {
-      setMessage("systemdResult", error.message, true);
-    }
-  });
-
-  backfillRequestsBtn.addEventListener("click", async () => {
-    try {
-      await backfillRequests();
-    } catch (error) {
-      setMessage("backfillResult", error.message, true);
-    }
-  });
-
-  passwordForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const formData = new FormData(passwordForm);
-
-    try {
-      await fetchJson("api/auth/change-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          currentPassword: String(formData.get("currentPassword") || ""),
-          newPassword: String(formData.get("newPassword") || "")
-        })
-      });
-
-      passwordForm.reset();
-      setMessage("passwordResult", "Password updated.");
-    } catch (error) {
-      setMessage("passwordResult", error.message, true);
-    }
+      showApp({ username: data.username });
+    } catch (err) { setMsg("loginMsg", err.message, "err"); }
   });
 }
 
+function showApp(user) {
+  document.getElementById("setupScreen")?.classList.add("hidden");
+  document.getElementById("loginScreen")?.classList.add("hidden");
+  document.getElementById("appShell")?.classList.remove("hidden");
+  wireAll(user);
+}
+
+/* ─────────────────────────────── init ────────────────── */
 async function init() {
-  wireAuth();
+  wireSetupForm();
+  wireLoginForm();
 
-  const setup = await loadSetupStatus();
-  if (setup.setupRequired) {
-    renderEnvForm("setupEnvForm", setup.allowedKeys, setup.values);
-    showPanel("setupPanel");
+  try {
+    const status = await fetchJson("api/setup/status");
+    if (status.setupRequired) {
+      renderEnvForm("setupEnvForm", status.allowedKeys, status.values);
+      document.getElementById("setupScreen")?.classList.remove("hidden");
+      return;
+    }
+  } catch {
+    // fall through to login
+  }
+
+  try {
+    const me = await fetchJson("api/auth/me");
+    showApp(me.user);
     return;
+  } catch {
+    // not logged in
   }
 
-  showPanel("loginPanel");
-
-  const user = await checkSession();
-  if (user) {
-    await showDashboard(user);
-  }
+  document.getElementById("loginScreen")?.classList.remove("hidden");
 }
 
-init().catch((error) => {
-  console.error(error);
-  const box = document.getElementById("health");
-  box.textContent = `Dashboard load failed: ${error.message}`;
-});
+window.addEventListener("DOMContentLoaded", () => init().catch(console.error));

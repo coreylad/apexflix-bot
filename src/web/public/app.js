@@ -41,17 +41,20 @@ function fmtDate(isoString) {
 
 /*  status badge helpers  */
 const STATUS_LABELS = {
-  1: ["badge-muted", "Unknown"],
-  2: ["badge-blue", "Pending"],
-  3: ["badge-orange", "Processing"],
-  4: ["badge-teal", "Partial"],
-  5: ["badge-green", "Available"],
-  6: ["badge-red", "Declined"],
-  7: ["badge-purple", "Blocked"]
+  0: ["badge-muted", "Unknown"],
+  1: ["badge-blue", "Pending"],
+  2: ["badge-blue", "Approved"],
+  3: ["badge-red", "Declined"],
+  4: ["badge-green", "Available"],
+  5: ["badge-orange", "Processing"],
+  6: ["badge-teal", "Partial"],
+  7: ["badge-red", "Failed"],
+  8: ["badge-green", "Completed"]
 };
 
 function statusBadge(code) {
-  const [cls, label] = STATUS_LABELS[Number(code)] || ["badge-muted", `#${code}`];
+  const numeric = Number(code);
+  const [cls, label] = STATUS_LABELS[numeric] || ["badge-muted", "Unknown"];
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
@@ -329,7 +332,7 @@ async function loadDashboardRequests() {
           <td class="mono">#${r.request_id}</td>
           <td>${escapeHtml(r.title || "")}</td>
           <td><span class="badge badge-purple">${escapeHtml(r.media_type || "")}</span></td>
-          <td>${statusBadge(r.status_code)}</td>
+          <td>${statusBadge(r.status ?? r.status_code)}</td>
           <td class="muted-text">${fmtDate(r.updated_at)}</td>
         </tr>`
       )
@@ -356,7 +359,7 @@ async function loadRequestsTable() {
           <td class="mono">#${r.request_id}</td>
           <td>${escapeHtml(r.title || "")}</td>
           <td><span class="badge badge-purple">${escapeHtml(r.media_type || "")}</span></td>
-          <td>${statusBadge(r.status_code)}</td>
+          <td>${statusBadge(r.status ?? r.status_code)}</td>
         </tr>`
       )
       .join("");
@@ -827,6 +830,15 @@ function downloadLogs() {
   window.location = "/api/admin/logs/download";
 }
 
+function bindButtonClick(id, handler) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("click", (e) => {
+    e.preventDefault();
+    handler(e);
+  });
+}
+
 /*  wire all  */
 function wireAll(user) {
   const userEl = document.getElementById("sidebarUser");
@@ -843,10 +855,10 @@ function wireAll(user) {
   });
 
   // Dashboard
-  document.getElementById("dashRefreshNowPlaying")?.addEventListener("click", loadDashboardNowPlaying);
-  document.getElementById("dashRefreshLatest")?.addEventListener("click", loadDashboardLatest);
-  document.getElementById("dashRefreshRequests")?.addEventListener("click", loadDashboardRequests);
-  document.getElementById("dashBackfillBtn")?.addEventListener("click", async () => {
+  bindButtonClick("dashRefreshNowPlaying", loadDashboardNowPlaying);
+  bindButtonClick("dashRefreshLatest", loadDashboardLatest);
+  bindButtonClick("dashRefreshRequests", loadDashboardRequests);
+  bindButtonClick("dashBackfillBtn", async () => {
     setMsg("dashBackfillMsg", "Running backfill", "info");
     try {
       const data = await fetchJson("api/admin/requests/backfill", { method: "POST" });
@@ -857,11 +869,11 @@ function wireAll(user) {
 
   // Requests
   wireRequestForm();
-  document.getElementById("reqRefreshBtn")?.addEventListener("click", loadRequestsTable);
+  bindButtonClick("reqRefreshBtn", loadRequestsTable);
 
   // Jellyfin
-  document.getElementById("jellyRefreshNP")?.addEventListener("click", loadJellyfinNowPlaying);
-  document.getElementById("jellyRefreshLibs")?.addEventListener("click", loadJellyfinLibraries);
+  bindButtonClick("jellyRefreshNP", loadJellyfinNowPlaying);
+  bindButtonClick("jellyRefreshLibs", loadJellyfinLibraries);
   document.getElementById("publishNowPlayingBtn")?.addEventListener("click", async () => {
     setMsg("jellyNPMsg", "Publishing to Discord", "info");
     try {
@@ -878,7 +890,7 @@ function wireAll(user) {
   });
 
   // Reports
-  document.getElementById("reportsRefreshBtn")?.addEventListener("click", loadReports);
+  bindButtonClick("reportsRefreshBtn", loadReports);
   document.getElementById("respondSubmitBtn")?.addEventListener("click", async () => {
     clearMsg("respondMsg");
     const issueId = Number(document.getElementById("respondIssueId")?.value || 0);
@@ -917,7 +929,7 @@ function wireAll(user) {
   document.getElementById("saveEnvBtn")?.addEventListener("click", saveEnvSettings);
 
   // System
-  document.getElementById("healthRefreshBtn")?.addEventListener("click", loadHealth);
+  bindButtonClick("healthRefreshBtn", loadHealth);
   document.getElementById("generateSystemdBtn")?.addEventListener("click", generateSystemdUnit);
   document.getElementById("passwordForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -938,7 +950,7 @@ function wireAll(user) {
   });
 
   // Logs
-  document.getElementById("logsRefreshBtn")?.addEventListener("click", loadLogs);
+  bindButtonClick("logsRefreshBtn", loadLogs);
   document.getElementById("logsTailToggleBtn")?.addEventListener("click", toggleLogTail);
   document.getElementById("logsClearBtn")?.addEventListener("click", clearLogs);
   document.getElementById("logsDownloadBtn")?.addEventListener("click", downloadLogs);

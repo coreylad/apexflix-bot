@@ -167,7 +167,7 @@
                   <div class="card-title"> Now Playing</div>
                   <div class="card-subtitle">Live Jellyfin sessions</div>
                 </div>
-                <button class="btn-secondary btn-sm" id="dashRefreshNowPlaying">Refresh</button>
+                <button type="button" class="btn-secondary btn-sm" id="dashRefreshNowPlaying">Refresh</button>
               </div>
               <div id="dashNowPlaying">
                 <div class="empty-state"><div class="empty-icon"></div>No active playback</div>
@@ -180,7 +180,7 @@
                   <div class="card-title"> Recently Added</div>
                   <div class="card-subtitle">Latest items in Jellyfin</div>
                 </div>
-                <button class="btn-secondary btn-sm" id="dashRefreshLatest">Refresh</button>
+                <button type="button" class="btn-secondary btn-sm" id="dashRefreshLatest">Refresh</button>
               </div>
               <div class="table-wrap">
                 <table class="data-table">
@@ -197,8 +197,8 @@
                   <div class="card-subtitle">Latest Overseerr activity</div>
                 </div>
                 <div style="display:flex;gap:0.5rem">
-                  <button class="btn-secondary btn-sm" id="dashRefreshRequests">Refresh</button>
-                  <button class="btn-orange btn-sm" id="dashBackfillBtn">Backfill from Seerr</button>
+                  <button type="button" class="btn-secondary btn-sm" id="dashRefreshRequests">Refresh</button>
+                  <button type="button" class="btn-orange btn-sm" id="dashBackfillBtn">Backfill from Seerr</button>
                 </div>
               </div>
               <div class="table-wrap">
@@ -249,7 +249,7 @@
                   <div class="card-title">All Requests</div>
                   <div class="card-subtitle">Tracked in local database</div>
                 </div>
-                <button class="btn-secondary btn-sm" id="reqRefreshBtn">Refresh</button>
+                <button type="button" class="btn-secondary btn-sm" id="reqRefreshBtn">Refresh</button>
               </div>
               <div class="table-wrap">
                 <table class="data-table">
@@ -293,8 +293,8 @@
                   <div class="card-subtitle">Current active sessions</div>
                 </div>
                 <div style="display:flex;gap:0.5rem">
-                  <button class="btn-secondary btn-sm" id="jellyRefreshNP">Refresh</button>
-                  <button class="btn-blue btn-sm" id="publishNowPlayingBtn"> Publish to Discord</button>
+                  <button type="button" class="btn-secondary btn-sm" id="jellyRefreshNP">Refresh</button>
+                  <button type="button" class="btn-blue btn-sm" id="publishNowPlayingBtn"> Publish to Discord</button>
                 </div>
               </div>
               <div id="jellyNowPlaying">
@@ -309,7 +309,7 @@
                   <div class="card-title"> Library Sections</div>
                   <div class="card-subtitle">Jellyfin media libraries</div>
                 </div>
-                <button class="btn-secondary btn-sm" id="jellyRefreshLibs">Refresh</button>
+                <button type="button" class="btn-secondary btn-sm" id="jellyRefreshLibs">Refresh</button>
               </div>
               <div class="table-wrap">
                 <table class="data-table">
@@ -325,7 +325,7 @@
                   <div class="card-title"> Stats Snapshot</div>
                   <div class="card-subtitle">Library totals and activity summary</div>
                 </div>
-                <button class="btn-purple btn-sm" id="publishJellyStatsBtn"> Publish to Discord</button>
+                <button type="button" class="btn-purple btn-sm" id="publishJellyStatsBtn"> Publish to Discord</button>
               </div>
               <div class="grid-4" id="jellyStatsGrid">
                 <div class="stat-card"><div class="stat-label">Played Items</div><div class="stat-value green" id="jellyPlayed"></div></div>
@@ -347,7 +347,7 @@
                 <div class="card-title"> Overseerr Issues</div>
                 <div class="card-subtitle">Latest reported problems from your users</div>
               </div>
-              <button class="btn-secondary btn-sm" id="reportsRefreshBtn">Refresh</button>
+              <button type="button" class="btn-secondary btn-sm" id="reportsRefreshBtn">Refresh</button>
             </div>
             <div class="table-wrap">
               <table class="data-table">
@@ -381,7 +381,7 @@
               <label>Message <input type="text" id="respondMessage" placeholder="Your reply" /></label>
             </div>
             <div class="btn-row">
-              <button class="btn-primary" id="respondSubmitBtn">Post Comment</button>
+              <button type="button" class="btn-primary" id="respondSubmitBtn">Post Comment</button>
             </div>
             <div id="respondMsg" class="msg"></div>
           </div>
@@ -490,7 +490,7 @@
           </form>
 
           <div class="btn-row">
-            <button class="btn-primary" id="saveBotConfigBtn">Save Bot Config</button>
+            <button type="button" class="btn-primary" id="saveBotConfigBtn">Save Bot Config</button>
           </div>
           <div id="botConfigMsg" class="msg"></div>
         </div>
@@ -581,7 +581,7 @@
           </form>
 
           <div class="btn-row">
-            <button class="btn-primary" id="saveChannelsBtn">Save Channels &amp; Roles</button>
+            <button type="button" class="btn-primary" id="saveChannelsBtn">Save Channels &amp; Roles</button>
           </div>
           <div id="channelsMsg" class="msg"></div>
         </div>
@@ -594,7 +594,7 @@
           <form id="envForm"></form>
 
           <div class="btn-row">
-            <button class="btn-primary" id="saveEnvBtn">Save Environment</button>
+            <button type="button" class="btn-primary" id="saveEnvBtn">Save Environment</button>
           </div>
           <div id="envMsg" class="msg"></div>
         </div>
@@ -626,10 +626,10 @@
                   <input id="logsLimit" type="number" min="10" max="5000" value="200" style="width:6rem" />
                 </label>
                 <input id="logsSearch" placeholder="Search logs..." style="width:18rem;padding:0.4rem" />
-                <button class="btn-secondary btn-sm" id="logsRefreshBtn">Refresh</button>
-                <button class="btn-orange btn-sm" id="logsTailToggleBtn">Start Tail</button>
-                <button class="btn-danger btn-sm" id="logsClearBtn">Clear</button>
-                <button class="btn-primary btn-sm" id="logsDownloadBtn">Download</button>
+                <button type="button" class="btn-secondary btn-sm" id="logsRefreshBtn">Refresh</button>
+                <button type="button" class="btn-orange btn-sm" id="logsTailToggleBtn">Start Tail</button>
+                <button type="button" class="btn-danger btn-sm" id="logsClearBtn">Clear</button>
+                <button type="button" class="btn-primary btn-sm" id="logsDownloadBtn">Download</button>
               </div>
             </div>
 
@@ -650,7 +650,7 @@
                   <div class="card-title"> Service Health</div>
                   <div class="card-subtitle">Live status of all integrated services</div>
                 </div>
-                <button class="btn-secondary btn-sm" id="healthRefreshBtn">Refresh</button>
+                <button type="button" class="btn-secondary btn-sm" id="healthRefreshBtn">Refresh</button>
               </div>
               <pre id="healthBox" class="console-box">Loading</pre>
             </div>
@@ -688,7 +688,7 @@
                 </div>
               </form>
               <div class="btn-row">
-                <button class="btn-secondary" id="generateSystemdBtn">Generate Unit File</button>
+                <button type="button" class="btn-secondary" id="generateSystemdBtn">Generate Unit File</button>
               </div>
               <div id="systemdMsg" class="msg"></div>
               <p class="text-sm muted" style="margin-top:0.8rem">Deploy Commands</p>

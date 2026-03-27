@@ -521,7 +521,14 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
           let mediaType =
             String(details.type || media.mediaType || media.type || "unknown").toLowerCase();
           const mediaId = Number(media.tmdbId || media.id || details.mediaId || 0);
-          const status = Number(details.status || 0);
+          const snapshot =
+            typeof overseerr.resolveStatusSnapshot === "function"
+              ? overseerr.resolveStatusSnapshot(details)
+              : {
+                  status: Number(details.status || 0),
+                  statusText: overseerr.getRequestStatusText(Number(details.status || 0))
+                };
+          const status = Number(snapshot.status || 0);
 
           if (title === "Unknown title" && mediaId > 0) {
             const fallback = await overseerr.getMediaByTmdbId(mediaId, mediaType);
@@ -537,7 +544,7 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
             mediaId,
             title,
             status,
-            statusText: overseerr.getRequestStatusText(status),
+            statusText: snapshot.statusText || overseerr.getRequestStatusText(status),
             requestedBy: details.requestedBy?.id
           });
 

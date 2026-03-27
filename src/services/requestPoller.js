@@ -187,13 +187,6 @@ function createRequestPoller({ config, logger, db, overseerr, bot }) {
             image: request.media?.posterPath || request.media?.poster || ""
           });
 
-          if (link?.discord_user_id) {
-            const msg = `Request update: ${normalized.title} is now ${normalized.statusText}.`;
-            await bot.notifyDiscordUser(link.discord_user_id, msg);
-            logger.info(
-              `Notified Discord user ${link.discord_user_id} for request ${normalized.requestId}`
-            );
-          }
         }
       }
     } catch (error) {

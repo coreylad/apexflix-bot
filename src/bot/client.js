@@ -919,21 +919,8 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
   }
 
   async function notifyDiscordUser(discordUserId, message) {
-    if (!online) {
-      return;
-    }
-
-    const cfg = getBotConfig();
-    if (!cfg.dmOnStatusChange) {
-      return;
-    }
-
-    try {
-      const user = await client.users.fetch(discordUserId);
-      await user.send(message);
-    } catch (error) {
-      logger.warn(`Failed to DM Discord user ${discordUserId}: ${error.message}`);
-    }
+    // DM notifications are intentionally disabled; updates are server-channel only.
+    return;
   }
 
   client.once("clientReady", async () => {

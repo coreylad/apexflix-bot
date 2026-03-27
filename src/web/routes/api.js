@@ -12,7 +12,13 @@ const DEFAULT_BOT_CONFIG = {
   announceOnAnyStatus: "false",
   dmOnStatusChange: "true",
   mentionRequesterInChannel: "true",
-  useRichEmbeds: "true"
+  useRichEmbeds: "true",
+  requestAnnouncementTemplate:
+    "{{event}}\nTitle: {{subject}}\nType: {{media_type}}\nRequest ID: {{request_id}}\nRequested by: {{requestedBy_username}}",
+  availableAnnouncementTemplate:
+    "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}",
+  statusAnnouncementTemplate:
+    "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}"
 };
 
 function asBoolString(value, fallback = "false") {
@@ -44,7 +50,13 @@ function normalizeBotConfig(input) {
     announceOnAnyStatus: asBoolString(source.announceOnAnyStatus, DEFAULT_BOT_CONFIG.announceOnAnyStatus),
     dmOnStatusChange: asBoolString(source.dmOnStatusChange, DEFAULT_BOT_CONFIG.dmOnStatusChange),
     mentionRequesterInChannel: asBoolString(source.mentionRequesterInChannel, DEFAULT_BOT_CONFIG.mentionRequesterInChannel),
-    useRichEmbeds: asBoolString(source.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds)
+    useRichEmbeds: asBoolString(source.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds),
+    requestAnnouncementTemplate:
+      String(source.requestAnnouncementTemplate || DEFAULT_BOT_CONFIG.requestAnnouncementTemplate).trim(),
+    availableAnnouncementTemplate:
+      String(source.availableAnnouncementTemplate || DEFAULT_BOT_CONFIG.availableAnnouncementTemplate).trim(),
+    statusAnnouncementTemplate:
+      String(source.statusAnnouncementTemplate || DEFAULT_BOT_CONFIG.statusAnnouncementTemplate).trim()
   };
 }
 

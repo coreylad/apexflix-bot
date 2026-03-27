@@ -20,7 +20,13 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     announceOnAnyStatus: false,
     dmOnStatusChange: true,
     mentionRequesterInChannel: true,
-    useRichEmbeds: true
+    useRichEmbeds: true,
+    requestAnnouncementTemplate:
+      "{{event}}\nTitle: {{subject}}\nType: {{media_type}}\nRequest ID: {{request_id}}\nRequested by: {{requestedBy_username}}",
+    availableAnnouncementTemplate:
+      "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}",
+    statusAnnouncementTemplate:
+      "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}"
   };
 
   let online = false;
@@ -68,7 +74,51 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       announceOnAnyStatus: asBoolean(stored.announceOnAnyStatus, DEFAULT_BOT_CONFIG.announceOnAnyStatus),
       dmOnStatusChange: asBoolean(stored.dmOnStatusChange, DEFAULT_BOT_CONFIG.dmOnStatusChange),
       mentionRequesterInChannel: asBoolean(stored.mentionRequesterInChannel, DEFAULT_BOT_CONFIG.mentionRequesterInChannel),
-      useRichEmbeds: asBoolean(stored.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds)
+      useRichEmbeds: asBoolean(stored.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds),
+      requestAnnouncementTemplate:
+        String(stored.requestAnnouncementTemplate || DEFAULT_BOT_CONFIG.requestAnnouncementTemplate),
+      availableAnnouncementTemplate:
+        String(stored.availableAnnouncementTemplate || DEFAULT_BOT_CONFIG.availableAnnouncementTemplate),
+      statusAnnouncementTemplate:
+        String(stored.statusAnnouncementTemplate || DEFAULT_BOT_CONFIG.statusAnnouncementTemplate)
+    };
+  }
+
+  function renderTemplate(template, context) {
+    const source = String(template || "");
+    return source.replace(/{{\s*([^}]+)\s*}}/g, (_, key) => {
+      const value = context[key];
+      return value === undefined || value === null ? "" : String(value);
+    });
+  }
+
+  function buildTemplateContext({
+    notificationType,
+    event,
+    subject,
+    message,
+    image,
+    mediaType,
+    mediaTmdbId,
+    mediaStatus,
+    requestId,
+    requesterUsername,
+    requesterDiscordId,
+    seasons
+  }) {
+    return {
+      notification_type: notificationType || "",
+      event: event || "",
+      subject: subject || "",
+      message: message || "",
+      image: image || "",
+      media_type: mediaType || "",
+      media_tmdbid: mediaTmdbId || "",
+      media_status: mediaStatus || "",
+      request_id: requestId || "",
+      requestedBy_username: requesterUsername || "",
+      requestedBy_settings_discordId: requesterDiscordId || "",
+      extra: seasons || ""
     };
   }
 
@@ -117,7 +167,16 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     };
   }
 
-  async function announceRequestCreated({ title, mediaType, requestId, requesterDiscordId }) {
+  async function announceRequestCreated({
+    title,
+    mediaType,
+    mediaId,
+    requestId,
+    requesterDiscordId,
+    requesterUsername,
+    seasons,
+    image
+  }) {
     const cfg = getBotConfig();
     if (!cfg.announceOnRequestCreated || !cfg.requestsChannelId) {
       return;
@@ -129,9 +188,26 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         ? `<@${requesterDiscordId}>`
         : "";
 
+    const templateContext = buildTemplateContext({
+      notificationType: "MEDIA_PENDING",
+      event: "Request Pending Approval",
+      subject: title,
+      message: `${title} was requested and sent to Overseerr.`,
+      image,
+      mediaType,
+      mediaTmdbId: mediaId,
+      mediaStatus: "PENDING",
+      requestId,
+      requesterUsername,
+      requesterDiscordId,
+      seasons: seasons?.join(",")
+    });
+
+    const rendered = renderTemplate(cfg.requestAnnouncementTemplate, templateContext);
+
     const payload = buildAnnouncementPayload({
       title: "New Media Request",
-      description: `${title} was requested and sent to Overseerr.`,
+      description: rendered,
       color: 0x4cc9f0,
       mention,
       fields: [
@@ -143,16 +219,43 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     await sendToChannel(cfg.requestsChannelId, payload);
   }
 
-  async function announceRequestStatusChange({ title, requestId, statusText, status, requesterDiscordId }) {
+  async function announceRequestStatusChange({
+    title,
+    mediaType,
+    mediaId,
+    requestId,
+    statusText,
+    status,
+    requesterDiscordId,
+    requesterUsername,
+    seasons,
+    image
+  }) {
     const cfg = getBotConfig();
     const isAvailable = Number(status) === 4;
 
     const mention = cfg.mentionRequesterInChannel && requesterDiscordId ? `<@${requesterDiscordId}>` : "";
 
+    const templateContext = buildTemplateContext({
+      notificationType: status === 4 ? "MEDIA_AVAILABLE" : "MEDIA_STATUS_CHANGED",
+      event: status === 4 ? "Request Available" : "Request Status Changed",
+      subject: title,
+      message: `${title} changed status to ${statusText}.`,
+      image,
+      mediaType,
+      mediaTmdbId: mediaId,
+      mediaStatus: statusText,
+      requestId,
+      requesterUsername,
+      requesterDiscordId,
+      seasons: seasons?.join(",")
+    });
+
     if (isAvailable && cfg.announceOnAvailable && cfg.uploadsChannelId) {
+      const rendered = renderTemplate(cfg.availableAnnouncementTemplate, templateContext);
       const payload = buildAnnouncementPayload({
         title: "Media Is Now Available",
-        description: `${title} is now available in your media server.`,
+        description: rendered,
         color: 0x2ecc71,
         mention,
         fields: [
@@ -164,9 +267,10 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     }
 
     if (cfg.announceOnAnyStatus && cfg.updatesChannelId) {
+      const rendered = renderTemplate(cfg.statusAnnouncementTemplate, templateContext);
       const payload = buildAnnouncementPayload({
         title: "Request Status Updated",
-        description: `${title} changed status.`,
+        description: rendered,
         color: 0xf9c74f,
         mention,
         fields: [
@@ -196,6 +300,32 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     }
 
     return `HTTP ${status}: ${error.message}`;
+  }
+
+  function parseSeasonMode(rawValue) {
+    const normalized = String(rawValue || "").trim().toLowerCase();
+    if (!normalized) {
+      return { mode: "none" };
+    }
+
+    if (normalized === "all") {
+      return { mode: "all" };
+    }
+
+    if (normalized === "latest") {
+      return { mode: "latest" };
+    }
+
+    const compact = normalized.replace(/\s+/g, "");
+    const match = compact.match(/^season(?:\[(\d+)\]|(\d+))$/);
+    if (match) {
+      const seasonNumber = Number(match[1] || match[2]);
+      if (Number.isInteger(seasonNumber) && seasonNumber > 0) {
+        return { mode: "single", seasonNumber };
+      }
+    }
+
+    return { mode: "invalid", input: rawValue };
   }
 
   async function registerSlashCommands() {
@@ -281,14 +411,92 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     const mediaId = interaction.options.getInteger("media_id", true);
     const mediaType = interaction.options.getString("media_type", true);
+    const seasonInput = interaction.options.getString("season");
+    const parsedSeason = parseSeasonMode(seasonInput);
+
+    if (mediaType === "tv" && parsedSeason.mode === "none") {
+      await interaction.reply(
+        toEphemeralResponse(
+          "TV requests require a season mode: all, latest, season1, or season[1]."
+        )
+      );
+      return;
+    }
+
+    if (mediaType === "tv" && parsedSeason.mode === "invalid") {
+      await interaction.reply(
+        toEphemeralResponse(
+          "Invalid season format. Use one of: all, latest, season1, season[1]."
+        )
+      );
+      return;
+    }
+
+    if (mediaType === "movie" && parsedSeason.mode !== "none") {
+      await interaction.reply(
+        toEphemeralResponse("Season is only valid when media_type is TV.")
+      );
+      return;
+    }
+
+    let selectedSeasons = [];
+    if (mediaType === "tv") {
+      const availableSeasons = await overseerr.getTvSeasonNumbers(mediaId);
+      if (availableSeasons.length === 0) {
+        await interaction.reply(
+          toEphemeralResponse(
+            "Could not resolve available seasons from Seerr for that TV ID. Verify the TMDB ID and Seerr metadata."
+          )
+        );
+        return;
+      }
+
+      if (parsedSeason.mode === "all") {
+        selectedSeasons = availableSeasons;
+      } else if (parsedSeason.mode === "latest") {
+        selectedSeasons = [availableSeasons[availableSeasons.length - 1]];
+      } else if (parsedSeason.mode === "single") {
+        if (!availableSeasons.includes(parsedSeason.seasonNumber)) {
+          await interaction.reply(
+            toEphemeralResponse(
+              `Season ${parsedSeason.seasonNumber} does not exist for this show in Seerr. Available: ${availableSeasons.join(", ")}`
+            )
+          );
+          return;
+        }
+        selectedSeasons = [parsedSeason.seasonNumber];
+      }
+    }
+
     const userId = await resolveOverseerrUserId(interaction.user.id);
 
-    const response = await overseerr.requestMedia({ mediaType, mediaId, userId });
+    const response = await overseerr.requestMedia({
+      mediaType,
+      mediaId,
+      userId,
+      seasons: selectedSeasons
+    });
 
-    const requestId = response.id || response.request?.id;
-    const status = response.status || response.request?.status || 1;
-    const title =
-      response.media?.title || response.media?.name || `TMDB ${mediaType} ${mediaId}`;
+    const requestObj = response.request || response;
+    const mediaObj = response.media || requestObj.media || {};
+    const requestId = requestObj.id || response.id;
+    const status = requestObj.status || response.status || 1;
+    const title = mediaObj.title || mediaObj.name || `TMDB ${mediaType} ${mediaId}`;
+    const requesterUsername =
+      requestObj.requestedBy?.displayName || requestObj.requestedBy?.username || interaction.user.username;
+    const seasons = Array.isArray(requestObj.seasons)
+      ? requestObj.seasons
+          .map((item) => {
+            if (Number.isInteger(item)) {
+              return item;
+            }
+            if (Number.isInteger(item?.seasonNumber)) {
+              return item.seasonNumber;
+            }
+            return null;
+          })
+          .filter((item) => Number.isInteger(item))
+      : selectedSeasons;
 
     if (requestId) {
       db.upsertRequestEvent({
@@ -304,15 +512,21 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     await interaction.reply(
       toEphemeralResponse(
-        `Request submitted: ${title} (request id ${requestId || "unknown"}, status ${overseerr.getRequestStatusText(status)}).`
+        `Request submitted: ${title}${
+          mediaType === "tv" && seasons.length > 0 ? ` (seasons ${seasons.join(", ")})` : ""
+        } (request id ${requestId || "unknown"}, status ${overseerr.getRequestStatusText(status)}).`
       )
     );
 
     await announceRequestCreated({
       title,
       mediaType,
+      mediaId,
       requestId,
-      requesterDiscordId: interaction.user.id
+      requesterDiscordId: interaction.user.id,
+      requesterUsername,
+      seasons,
+      image: mediaObj.posterPath || mediaObj.poster || ""
     });
   }
 

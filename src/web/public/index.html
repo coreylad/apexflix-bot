@@ -184,6 +184,28 @@
                 </label>
               </div>
             </section>
+
+            <section class="settings-group">
+              <h3>Seerr-Style Templates</h3>
+              <p class="muted small-muted">
+                Use variables like {{event}}, {{subject}}, {{media_type}}, {{request_id}},
+                {{requestedBy_username}}, {{requestedBy_settings_discordId}}.
+              </p>
+              <div class="settings-group-grid one-col">
+                <label>
+                  Request Created Template
+                  <textarea name="requestAnnouncementTemplate" rows="4"></textarea>
+                </label>
+                <label>
+                  Available Upload Template
+                  <textarea name="availableAnnouncementTemplate" rows="4"></textarea>
+                </label>
+                <label>
+                  Status Update Template
+                  <textarea name="statusAnnouncementTemplate" rows="4"></textarea>
+                </label>
+              </div>
+            </section>
           </form>
           <div class="admin-actions">
             <button id="saveBotConfigBtn" type="button">Save Bot Config</button>

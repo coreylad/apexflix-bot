@@ -42,10 +42,16 @@ function createRequestPoller({ config, logger, db, overseerr, bot }) {
 
           await bot.announceRequestStatusChange({
             title: normalized.title,
+            mediaType: normalized.mediaType,
+            mediaId: normalized.mediaId,
             requestId: normalized.requestId,
             statusText: normalized.statusText,
             status: normalized.status,
-            requesterDiscordId: link?.discord_user_id || ""
+            requesterDiscordId: link?.discord_user_id || "",
+            requesterUsername:
+              request.requestedBy?.displayName || request.requestedBy?.username || "",
+            seasons: Array.isArray(request.seasons) ? request.seasons : [],
+            image: request.media?.posterPath || request.media?.poster || ""
           });
 
           if (link?.discord_user_id) {

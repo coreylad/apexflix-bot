@@ -51,6 +51,14 @@ function createOverseerrClient(config) {
     return status === 400 && message.includes("must be url encoded");
   }
 
+  function isOverseerrFilterCrash(error) {
+    const status = error?.response?.status;
+    const message = String(
+      error?.response?.data?.message || error?.response?.data?.error || error?.message || ""
+    ).toLowerCase();
+    return status === 500 && message.includes("reading 'filter'");
+  }
+
   function ensureConfigured() {
     const base = normalizedBaseUrl();
     if (!base || !config.apiKey) {
@@ -106,6 +114,37 @@ function createOverseerrClient(config) {
     return [];
   }
 
+  function extractSeasonNumbersFromNode(node, out) {
+    if (!node || typeof node !== "object") {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        extractSeasonNumbersFromNode(item, out);
+      }
+      return;
+    }
+
+    if (Number.isInteger(node.seasonNumber) && node.seasonNumber > 0) {
+      out.add(node.seasonNumber);
+    }
+
+    if (Array.isArray(node.seasons)) {
+      for (const season of node.seasons) {
+        if (Number.isInteger(season?.seasonNumber) && season.seasonNumber > 0) {
+          out.add(season.seasonNumber);
+        }
+      }
+    }
+
+    for (const value of Object.values(node)) {
+      if (value && typeof value === "object") {
+        extractSeasonNumbersFromNode(value, out);
+      }
+    }
+  }
+
   return {
     getRequestStatusText: (status) => REQUEST_STATUS[status] || `Unknown (${status})`,
     searchMedia: async (query, mediaType = "all") => {
@@ -141,15 +180,47 @@ function createOverseerrClient(config) {
 
       return filtered.map(normalizeResult);
     },
-    requestMedia: async ({ mediaType, mediaId, userId }) => {
+    requestMedia: async ({ mediaType, mediaId, userId, seasons }) => {
       const client = getClient();
       const normalizedType = String(mediaType || "").toLowerCase();
-      const response = await client.post(buildEndpoint("api/v1/request"), {
+      const requestedSeasons = coerceArray(seasons)
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0);
+      const hasSeasons = normalizedType === "tv" && requestedSeasons.length > 0;
+
+      const basePayload = {
         mediaType: normalizedType,
         mediaId,
         userId
-      });
-      return response.data;
+      };
+
+      if (hasSeasons) {
+        basePayload.seasons = requestedSeasons;
+      }
+
+      try {
+        const response = await client.post(buildEndpoint("api/v1/request"), basePayload);
+        return response.data;
+      } catch (error) {
+        if (!(normalizedType === "tv" && isOverseerrFilterCrash(error))) {
+          throw error;
+        }
+
+        // Some Overseerr builds crash when seasons is omitted for TV requests.
+        try {
+          const response = await client.post(buildEndpoint("api/v1/request"), {
+            ...basePayload,
+            seasons: hasSeasons ? requestedSeasons : []
+          });
+          return response.data;
+        } catch (retryError) {
+          const response = await client.post(buildEndpoint("api/v1/request"), {
+            ...basePayload,
+            seasons: hasSeasons ? requestedSeasons : [1]
+          });
+          return response.data;
+        }
+      }
     },
     getRequestById: async (requestId) => {
       const client = getClient();
@@ -165,6 +236,30 @@ function createOverseerrClient(config) {
         })
       );
       return coerceArray(response?.data?.results ?? response?.data);
+    },
+    getTvSeasonNumbers: async (mediaId) => {
+      const client = getClient();
+      const id = Number(mediaId);
+      const seasonSet = new Set();
+
+      const endpoints = [
+        buildEndpoint(`api/v1/tv/${id}`),
+        buildEndpoint(`api/v1/media/${id}`)
+      ];
+
+      for (const endpoint of endpoints) {
+        try {
+          const response = await client.get(endpoint);
+          extractSeasonNumbersFromNode(response?.data, seasonSet);
+          if (seasonSet.size > 0) {
+            break;
+          }
+        } catch (error) {
+          // Try fallback endpoint when one route is unavailable in a given Seerr build.
+        }
+      }
+
+      return Array.from(seasonSet).sort((a, b) => a - b);
     },
     findUserByUsername: async (username) => {
       const client = getClient();

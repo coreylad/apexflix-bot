@@ -63,7 +63,7 @@ npm start
 
 - `/link overseerr_username:<name>`
 - `/search query:<title> media_type:<all|movie|tv>`
-- `/request media_id:<id> media_type:<movie|tv>`
+- `/request media_type:<movie|tv> media_id:<id> season:<all|latest|season1|season[1]>`
 - `/status request_id:<id>`
 - `/recent`
 

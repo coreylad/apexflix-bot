@@ -220,7 +220,10 @@ async function loadBotConfig() {
     "requestsChannelId",
     "uploadsChannelId",
     "updatesChannelId",
-    "requestRoleId"
+    "requestRoleId",
+    "requestAnnouncementTemplate",
+    "availableAnnouncementTemplate",
+    "statusAnnouncementTemplate"
   ];
 
   const boolFields = [
@@ -256,7 +259,10 @@ async function saveBotConfig() {
     "requestsChannelId",
     "uploadsChannelId",
     "updatesChannelId",
-    "requestRoleId"
+    "requestRoleId",
+    "requestAnnouncementTemplate",
+    "availableAnnouncementTemplate",
+    "statusAnnouncementTemplate"
   ];
 
   const boolFields = [

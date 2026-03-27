@@ -30,7 +30,7 @@ function buildCommands() {
       ),
     new SlashCommandBuilder()
       .setName("request")
-      .setDescription("Request a movie or TV show by TMDB media id")
+      .setDescription("Request media by type, TMDB id, and TV season")
       .addIntegerOption((option) =>
         option
           .setName("media_id")
@@ -46,6 +46,12 @@ function buildCommands() {
             { name: "TV", value: "tv" }
           )
           .setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("season")
+          .setDescription("TV only: all, latest, season1, or season[1]")
+          .setRequired(false)
       ),
     new SlashCommandBuilder()
       .setName("status")

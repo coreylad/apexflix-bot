@@ -154,6 +154,15 @@ pre {
   gap: 0.7rem;
 }
 
+.one-col {
+  grid-template-columns: 1fr;
+}
+
+.small-muted {
+  font-size: 0.85rem;
+  margin: 0 0 0.7rem;
+}
+
 .checkbox-grid {
   grid-template-columns: 1fr;
 }
@@ -190,6 +199,7 @@ label {
 }
 
 input,
+textarea,
 select,
 button {
   border-radius: 10px;
@@ -198,6 +208,11 @@ button {
   color: var(--text);
   padding: 0.65rem 0.7rem;
   font: inherit;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
 }
 
 button {

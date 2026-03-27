@@ -221,9 +221,57 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         return;
       }
 
-      await channel.send(payload);
+      return await channel.send(payload);
     } catch (error) {
       logger.warn(`Failed to send message to channel ${channelId}: ${error.message}`);
+      return null;
+    }
+  }
+
+  async function sendOrEditTrackedRequestMessage({ requestId, channelKey, channelId, payload }) {
+    if (!requestId || !channelKey || !channelId) {
+      return null;
+    }
+
+    const existing = db.getRequestAnnouncementMessage(requestId, channelKey);
+
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !channel.isTextBased()) {
+        return null;
+      }
+
+      if (existing?.message_id) {
+        try {
+          const message = await channel.messages.fetch(existing.message_id);
+          if (message) {
+            await message.edit(payload);
+            db.saveRequestAnnouncementMessage({
+              requestId,
+              channelKey,
+              channelId,
+              messageId: message.id
+            });
+            return message;
+          }
+        } catch (error) {
+          db.deleteRequestAnnouncementMessage(requestId, channelKey);
+        }
+      }
+
+      const sent = await channel.send(payload);
+      if (sent?.id) {
+        db.saveRequestAnnouncementMessage({
+          requestId,
+          channelKey,
+          channelId,
+          messageId: sent.id
+        });
+      }
+      return sent || null;
+    } catch (error) {
+      logger.warn(`Failed to send/edit tracked message for request ${requestId} in ${channelKey}: ${error.message}`);
+      return null;
     }
   }
 
@@ -389,7 +437,12 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
           { name: "Status", value: statusText || "Unknown", inline: true }
         ]
       });
-      await sendToChannel(cfg.updatesChannelId, payload);
+      await sendOrEditTrackedRequestMessage({
+        requestId,
+        channelKey: "updates",
+        channelId: cfg.updatesChannelId,
+        payload
+      });
     }
 
     if (isAvailable) {

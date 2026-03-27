@@ -30,6 +30,15 @@ function initializeDatabase(logger) {
       last_checked_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS request_announcement_messages (
+      request_id INTEGER NOT NULL,
+      channel_key TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (request_id, channel_key)
+    );
+
     CREATE TABLE IF NOT EXISTS admin_users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
@@ -96,6 +105,26 @@ function initializeDatabase(logger) {
 
   const getAllRequestIdsStmt = db.prepare(
     "SELECT request_id FROM request_events ORDER BY request_id DESC"
+  );
+
+  const getRequestAnnouncementMessageStmt = db.prepare(
+    "SELECT * FROM request_announcement_messages WHERE request_id = ? AND channel_key = ?"
+  );
+
+  const upsertRequestAnnouncementMessageStmt = db.prepare(`
+    INSERT INTO request_announcement_messages (
+      request_id, channel_key, channel_id, message_id, updated_at
+    ) VALUES (
+      @requestId, @channelKey, @channelId, @messageId, @updatedAt
+    )
+    ON CONFLICT(request_id, channel_key) DO UPDATE SET
+      channel_id=excluded.channel_id,
+      message_id=excluded.message_id,
+      updated_at=excluded.updated_at
+  `);
+
+  const deleteRequestAnnouncementMessageStmt = db.prepare(
+    "DELETE FROM request_announcement_messages WHERE request_id = ? AND channel_key = ?"
   );
 
   const findAdminByUsernameStmt = db.prepare(
@@ -168,6 +197,20 @@ function initializeDatabase(logger) {
     getRequestEventById: (requestId) => getRequestByIdStmt.get(requestId) || null,
     getRecentRequestEvents: (limit = 20) => getRecentRequestsStmt.all(limit),
     getAllRequestIds: () => getAllRequestIdsStmt.all().map((row) => row.request_id),
+    getRequestAnnouncementMessage: (requestId, channelKey) =>
+      getRequestAnnouncementMessageStmt.get(requestId, channelKey) || null,
+    saveRequestAnnouncementMessage: ({ requestId, channelKey, channelId, messageId }) => {
+      upsertRequestAnnouncementMessageStmt.run({
+        requestId,
+        channelKey,
+        channelId,
+        messageId,
+        updatedAt: new Date().toISOString()
+      });
+    },
+    deleteRequestAnnouncementMessage: (requestId, channelKey) => {
+      deleteRequestAnnouncementMessageStmt.run(requestId, channelKey);
+    },
     countAdminUsers: () => countAdminsStmt.get()?.count || 0,
     createAdminUser: ({ username, passwordHash }) => {
       const result = insertAdminStmt.run(username, passwordHash, new Date().toISOString());

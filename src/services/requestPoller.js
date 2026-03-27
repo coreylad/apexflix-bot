@@ -41,15 +41,15 @@ function extractRequestData(item, overseerr) {
     "Unknown title"
   );
 
-  const effectiveStatus = overseerr.resolveEffectiveStatus(item);
+  const snapshot = overseerr.resolveStatusSnapshot(item);
 
   return {
     requestId: item.id,
     mediaType,
     mediaId,
     title,
-    status: effectiveStatus,
-    statusText: overseerr.getRequestStatusText(effectiveStatus),
+    status: snapshot.status,
+    statusText: snapshot.statusText,
     requestedBy: item.requestedBy?.id || null
   };
 }
@@ -165,7 +165,10 @@ function createRequestPoller({ config, logger, db, overseerr, bot }) {
 
         db.upsertRequestEvent(normalized);
 
-        if (existing && existing.status !== normalized.status) {
+        const statusChanged = existing && existing.status !== normalized.status;
+        const statusTextChanged = existing && existing.status_text !== normalized.statusText;
+
+        if (statusChanged || statusTextChanged) {
           const link = normalized.requestedBy
             ? db.getUserLinkByOverseerrId(normalized.requestedBy)
             : null;

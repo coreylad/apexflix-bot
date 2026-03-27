@@ -139,6 +139,25 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     return `https://image.tmdb.org/t/p/w500/${raw}`;
   }
 
+  async function resolveAnnouncementImageUrl({ image, mediaId, mediaType }) {
+    const direct = resolvePosterUrl(image);
+    if (direct) {
+      return direct;
+    }
+
+    const tmdbId = Number(mediaId || 0);
+    if (!Number.isInteger(tmdbId) || tmdbId <= 0) {
+      return "";
+    }
+
+    try {
+      const fallback = await overseerr.getMediaByTmdbId(tmdbId, mediaType);
+      return resolvePosterUrl(fallback?.posterPath || fallback?.poster || "");
+    } catch (error) {
+      return "";
+    }
+  }
+
   async function sendToChannel(channelId, payload) {
     if (!online || !channelId) {
       return;
@@ -163,8 +182,10 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         .concat((fields || []).map((field) => `${field.name}: ${field.value}`))
         .filter(Boolean)
         .join("\n");
+
+      const withImage = imageUrl ? `${flat}\nPoster: ${imageUrl}` : flat;
       return {
-        content: mention ? `${mention} ${flat}` : flat
+        content: mention ? `${mention} ${withImage}` : withImage
       };
     }
 
@@ -180,6 +201,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     if (imageUrl) {
       embed.setThumbnail(imageUrl);
+      embed.setImage(imageUrl);
     }
 
     return {
@@ -209,7 +231,11 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
         ? `<@${requesterDiscordId}>`
         : "";
 
-    const posterUrl = resolvePosterUrl(image);
+    const posterUrl = await resolveAnnouncementImageUrl({
+      image,
+      mediaId,
+      mediaType
+    });
     const templateContext = buildTemplateContext({
       notificationType: "MEDIA_PENDING",
       event: "Request Pending Approval",
@@ -259,7 +285,11 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
     const mention = cfg.mentionRequesterInChannel && requesterDiscordId ? `<@${requesterDiscordId}>` : "";
 
-    const posterUrl = resolvePosterUrl(image);
+    const posterUrl = await resolveAnnouncementImageUrl({
+      image,
+      mediaId,
+      mediaType
+    });
     const templateContext = buildTemplateContext({
       notificationType: status === 4 ? "MEDIA_AVAILABLE" : "MEDIA_STATUS_CHANGED",
       event: status === 4 ? "Request Available" : "Request Status Changed",
@@ -635,14 +665,15 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     const request = await overseerr.getRequestById(requestId);
 
     const title = await resolveRequestTitleFromDetails(request);
-    const statusText = overseerr.getRequestStatusText(request.status);
+    const statusSnapshot = overseerr.resolveStatusSnapshot(request);
+    const statusText = statusSnapshot.statusText;
 
     db.upsertRequestEvent({
       requestId: request.id,
       mediaType: request.type || request.media?.mediaType || "unknown",
       mediaId: request.media?.tmdbId || 0,
       title,
-      status: request.status,
+      status: statusSnapshot.status,
       statusText,
       requestedBy: request.requestedBy?.id
     });

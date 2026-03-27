@@ -1,14 +1,16 @@
 const axios = require("axios");
 const https = require("https");
 
-const REQUEST_STATUS = {
+const STATUS_TEXT = {
   0: "Unknown",
   1: "Pending",
   2: "Approved",
   3: "Declined",
   4: "Available",
   5: "Processing",
-  6: "Partially Available"
+  6: "Partially Available",
+  7: "Failed",
+  8: "Completed"
 };
 
 function createOverseerrClient(config) {
@@ -117,13 +119,64 @@ function createOverseerrClient(config) {
     return [];
   }
 
+  function firstNonEmpty(values, fallback = "") {
+    for (const value of values || []) {
+      if (value === undefined || value === null) {
+        continue;
+      }
+
+      const normalized = String(value).trim();
+      if (normalized) {
+        return normalized;
+      }
+    }
+
+    return fallback;
+  }
+
+  function normalizeRequestStatus(value) {
+    const numeric = Number(value);
+    if (Number.isInteger(numeric)) {
+      // Overseerr MediaRequestStatus: 1 Pending, 2 Approved, 3 Declined, 4 Failed, 5 Completed
+      if (numeric === 4) {
+        return 7;
+      }
+      if (numeric === 5) {
+        return 8;
+      }
+      if (numeric >= 1 && numeric <= 3) {
+        return numeric;
+      }
+    }
+
+    const normalized = String(value || "").trim().toUpperCase();
+    const map = {
+      PENDING: 1,
+      APPROVED: 2,
+      DECLINED: 3,
+      FAILED: 7,
+      COMPLETED: 8
+    };
+
+    return map[normalized] ?? 0;
+  }
+
   function mediaStatusToCode(value) {
     if (value === undefined || value === null) {
       return 0;
     }
 
     if (Number.isInteger(value)) {
-      return value;
+      // Overseerr MediaStatus: 1 Unknown, 2 Pending, 3 Processing, 4 Partially Available, 5 Available, 6 Deleted
+      const numericMap = {
+        1: 0,
+        2: 1,
+        3: 5,
+        4: 6,
+        5: 4,
+        6: 0
+      };
+      return numericMap[value] ?? 0;
     }
 
     const normalized = String(value).trim().toUpperCase();
@@ -132,24 +185,36 @@ function createOverseerrClient(config) {
       PENDING: 1,
       APPROVED: 2,
       DECLINED: 3,
-      AVAILABLE: 4,
       PROCESSING: 5,
-      PARTIALLY_AVAILABLE: 6
+      PARTIALLY_AVAILABLE: 6,
+      AVAILABLE: 4,
+      DELETED: 0
     };
 
     return map[normalized] ?? 0;
   }
 
   function resolveEffectiveStatus(item) {
-    const requestStatus = Number(item?.status || 0);
-    const mediaStatusCode = mediaStatusToCode(item?.media?.status || item?.mediaStatus);
+    const requestStatus = normalizeRequestStatus(item?.status);
+    const mediaStatusCode = mediaStatusToCode(
+      item?.media?.status || item?.mediaStatus || item?.media?.status4k || item?.mediaStatus4k
+    );
 
     if (requestStatus === 3) {
       return 3;
     }
 
+    if (requestStatus === 7) {
+      return 7;
+    }
+
     if ([4, 5, 6].includes(mediaStatusCode)) {
       return mediaStatusCode;
+    }
+
+    if (requestStatus === 8) {
+      // Completed request normally means media finished and imported.
+      return 4;
     }
 
     if (requestStatus > 0) {
@@ -161,6 +226,83 @@ function createOverseerrClient(config) {
     }
 
     return 0;
+  }
+
+  function formatProgressValue(entry) {
+    const candidates = [
+      entry?.progress,
+      entry?.percentage,
+      entry?.percent,
+      entry?.completion,
+      entry?.downloadPercentage
+    ];
+
+    for (const candidate of candidates) {
+      const numeric = Number(candidate);
+      if (Number.isFinite(numeric) && numeric >= 0) {
+        const clamped = Math.max(0, Math.min(100, numeric));
+        return `${Math.round(clamped)}%`;
+      }
+    }
+
+    return "";
+  }
+
+  function summarizeDownloadStatus(entries) {
+    const rows = coerceArray(entries).slice(0, 2);
+    if (rows.length === 0) {
+      return "";
+    }
+
+    const chunks = rows
+      .map((entry) => {
+        const label = firstNonEmpty(
+          [
+            entry?.title,
+            entry?.name,
+            entry?.episode?.title,
+            entry?.releaseTitle,
+            entry?.state,
+            entry?.status
+          ],
+          "Item"
+        );
+        const progress = formatProgressValue(entry);
+        const state = firstNonEmpty([entry?.state, entry?.status], "");
+
+        if (progress) {
+          return `${label} ${progress}`;
+        }
+
+        if (state) {
+          return `${label} ${state}`;
+        }
+
+        return label;
+      })
+      .filter(Boolean);
+
+    return chunks.join("; ");
+  }
+
+  function resolveStatusSnapshot(item) {
+    const status = resolveEffectiveStatus(item);
+    const base = STATUS_TEXT[status] || `Unknown (${status})`;
+    const downloadSummary = summarizeDownloadStatus(
+      item?.media?.downloadStatus || item?.media?.downloadStatus4k || item?.downloadStatus
+    );
+
+    if (downloadSummary && status === 5) {
+      return {
+        status,
+        statusText: `${base} (${downloadSummary})`
+      };
+    }
+
+    return {
+      status,
+      statusText: base
+    };
   }
 
   function extractSeasonNumbersFromNode(node, out) {
@@ -225,18 +367,24 @@ function createOverseerrClient(config) {
   return {
     getRequestStatusText: (status) => {
       const parsed = Number(status);
-      if (Number.isInteger(parsed) && REQUEST_STATUS[parsed]) {
-        return REQUEST_STATUS[parsed];
+      if (Number.isInteger(parsed) && STATUS_TEXT[parsed]) {
+        return STATUS_TEXT[parsed];
+      }
+
+      const fromRequest = normalizeRequestStatus(status);
+      if (STATUS_TEXT[fromRequest]) {
+        return STATUS_TEXT[fromRequest];
       }
 
       const fromMedia = mediaStatusToCode(status);
-      if (REQUEST_STATUS[fromMedia]) {
-        return REQUEST_STATUS[fromMedia];
+      if (STATUS_TEXT[fromMedia]) {
+        return STATUS_TEXT[fromMedia];
       }
 
       return `Unknown (${status})`;
     },
     resolveEffectiveStatus,
+    resolveStatusSnapshot,
     searchMedia: async (query, mediaType = "all") => {
       const client = getClient();
       const rawQuery = String(query || "").trim();

@@ -122,6 +122,75 @@
           <p id="envResult"></p>
         </article>
 
+        <article class="card env-card">
+          <h2>Discord Bot Config</h2>
+          <p class="muted">
+            Route request events to specific channels and control announcements, DM behavior, and
+            request-channel enforcement.
+          </p>
+          <form id="botConfigForm" class="settings-form">
+            <section class="settings-group">
+              <h3>Channels</h3>
+              <div class="settings-group-grid">
+                <label>
+                  Requests Channel ID
+                  <input name="requestsChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>
+                  Uploads Channel ID
+                  <input name="uploadsChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>
+                  Status Updates Channel ID
+                  <input name="updatesChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>
+                  Request Role ID (optional ping)
+                  <input name="requestRoleId" type="text" placeholder="123456789012345678" />
+                </label>
+              </div>
+            </section>
+
+            <section class="settings-group">
+              <h3>Automation Flags</h3>
+              <div class="settings-group-grid checkbox-grid">
+                <label class="check-label">
+                  <input name="enforceRequestChannel" type="checkbox" />
+                  Force /request in Requests channel only
+                </label>
+                <label class="check-label">
+                  <input name="announceOnRequestCreated" type="checkbox" />
+                  Announce newly created requests
+                </label>
+                <label class="check-label">
+                  <input name="announceOnAvailable" type="checkbox" />
+                  Announce when media becomes available
+                </label>
+                <label class="check-label">
+                  <input name="announceOnAnyStatus" type="checkbox" />
+                  Announce every status transition
+                </label>
+                <label class="check-label">
+                  <input name="dmOnStatusChange" type="checkbox" />
+                  DM linked users on status changes
+                </label>
+                <label class="check-label">
+                  <input name="mentionRequesterInChannel" type="checkbox" />
+                  Mention requester in channel announcements
+                </label>
+                <label class="check-label">
+                  <input name="useRichEmbeds" type="checkbox" />
+                  Use rich embeds for bot announcements
+                </label>
+              </div>
+            </section>
+          </form>
+          <div class="admin-actions">
+            <button id="saveBotConfigBtn" type="button">Save Bot Config</button>
+          </div>
+          <p id="botConfigResult"></p>
+        </article>
+
         <article class="card">
           <h2>Change Admin Password</h2>
           <form id="passwordForm">

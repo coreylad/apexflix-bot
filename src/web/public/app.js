@@ -212,6 +212,84 @@ async function saveEnvSettings() {
   setMessage("envResult", response.message || "Saved.");
 }
 
+async function loadBotConfig() {
+  const data = await fetchJson("api/admin/bot-config");
+  const form = document.getElementById("botConfigForm");
+
+  const textFields = [
+    "requestsChannelId",
+    "uploadsChannelId",
+    "updatesChannelId",
+    "requestRoleId"
+  ];
+
+  const boolFields = [
+    "enforceRequestChannel",
+    "announceOnRequestCreated",
+    "announceOnAvailable",
+    "announceOnAnyStatus",
+    "dmOnStatusChange",
+    "mentionRequesterInChannel",
+    "useRichEmbeds"
+  ];
+
+  for (const name of textFields) {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el) {
+      el.value = data.values[name] || "";
+    }
+  }
+
+  for (const name of boolFields) {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el) {
+      el.checked = String(data.values[name] || "false") === "true";
+    }
+  }
+}
+
+async function saveBotConfig() {
+  const form = document.getElementById("botConfigForm");
+  const values = {};
+
+  const textFields = [
+    "requestsChannelId",
+    "uploadsChannelId",
+    "updatesChannelId",
+    "requestRoleId"
+  ];
+
+  const boolFields = [
+    "enforceRequestChannel",
+    "announceOnRequestCreated",
+    "announceOnAvailable",
+    "announceOnAnyStatus",
+    "dmOnStatusChange",
+    "mentionRequesterInChannel",
+    "useRichEmbeds"
+  ];
+
+  for (const name of textFields) {
+    const el = form.querySelector(`[name="${name}"]`);
+    values[name] = el ? String(el.value || "").trim() : "";
+  }
+
+  for (const name of boolFields) {
+    const el = form.querySelector(`[name="${name}"]`);
+    values[name] = el?.checked ? "true" : "false";
+  }
+
+  const response = await fetchJson("api/admin/bot-config", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ values })
+  });
+
+  setMessage("botConfigResult", response.message || "Bot config saved.");
+}
+
 async function checkSession() {
   try {
     const me = await fetchJson("api/auth/me");
@@ -230,7 +308,7 @@ async function showDashboard(user) {
   document.getElementById("sessionUser").textContent = `Logged in as ${user.username}`;
 
   wireForm();
-  await Promise.all([loadHealth(), loadRequests(), loadLatest(), loadEnvSettings()]);
+  await Promise.all([loadHealth(), loadRequests(), loadLatest(), loadEnvSettings(), loadBotConfig()]);
 
   setInterval(() => {
     loadRequests().catch(console.error);
@@ -243,6 +321,7 @@ function wireAuth() {
   const loginForm = document.getElementById("loginForm");
   const logoutBtn = document.getElementById("logoutBtn");
   const saveEnvBtn = document.getElementById("saveEnvBtn");
+  const saveBotConfigBtn = document.getElementById("saveBotConfigBtn");
   const passwordForm = document.getElementById("passwordForm");
 
   setupForm.addEventListener("submit", async (event) => {
@@ -324,6 +403,14 @@ function wireAuth() {
       await saveEnvSettings();
     } catch (error) {
       setMessage("envResult", error.message, true);
+    }
+  });
+
+  saveBotConfigBtn.addEventListener("click", async () => {
+    try {
+      await saveBotConfig();
+    } catch (error) {
+      setMessage("botConfigResult", error.message, true);
     }
   });
 

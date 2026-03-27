@@ -154,6 +154,25 @@ pre {
   gap: 0.7rem;
 }
 
+.checkbox-grid {
+  grid-template-columns: 1fr;
+}
+
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  background: rgba(7, 9, 13, 0.45);
+}
+
+.check-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 .admin-bar {
   grid-column: 1 / -1;
 }

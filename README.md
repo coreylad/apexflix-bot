@@ -12,6 +12,7 @@ A self-contained Node.js app that runs:
 - User linking between Discord and Overseerr user accounts
 - Request status checks and DM notifications on status changes
 - Web UI for health, recent requests, and latest Jellyfin items
+- Discord bot config panel for channel routing and announcement automation
 - Private web login with session-based authentication
 - First-run setup wizard with admin user creation
 - In-browser `.env` editor (no manual file editing needed)
@@ -65,6 +66,18 @@ npm start
 - `/request media_id:<id> media_type:<movie|tv>`
 - `/status request_id:<id>`
 - `/recent`
+
+## Discord Automation Config (Web UI)
+
+The dashboard now includes a dedicated Discord Bot Config page where you can:
+- route request announcements to a Requests channel
+- route available uploads to an Uploads channel
+- route all status transitions to an Updates channel
+- enforce `/request` usage in one channel only
+- toggle DM notifications on status changes
+- toggle requester/role mentions and rich embeds
+
+Channel and role inputs use raw Discord IDs.
 
 ## Web UI
 

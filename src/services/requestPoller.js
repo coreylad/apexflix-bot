@@ -40,6 +40,14 @@ function createRequestPoller({ config, logger, db, overseerr, bot }) {
             ? db.getUserLinkByOverseerrId(normalized.requestedBy)
             : null;
 
+          await bot.announceRequestStatusChange({
+            title: normalized.title,
+            requestId: normalized.requestId,
+            statusText: normalized.statusText,
+            status: normalized.status,
+            requesterDiscordId: link?.discord_user_id || ""
+          });
+
           if (link?.discord_user_id) {
             const msg = `Request update: ${normalized.title} is now ${normalized.statusText}.`;
             await bot.notifyDiscordUser(link.discord_user_id, msg);

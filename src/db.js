@@ -44,6 +44,12 @@ function initializeDatabase(logger) {
       created_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES admin_users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS bot_config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   logger.info(`SQLite database initialized at ${dbPath}`);
@@ -120,6 +126,16 @@ function initializeDatabase(logger) {
     "UPDATE admin_users SET password_hash = ? WHERE id = ?"
   );
 
+  const getAllBotConfigStmt = db.prepare("SELECT key, value FROM bot_config");
+
+  const upsertBotConfigStmt = db.prepare(`
+    INSERT INTO bot_config (key, value, updated_at)
+    VALUES (@key, @value, @updatedAt)
+    ON CONFLICT(key) DO UPDATE SET
+      value=excluded.value,
+      updated_at=excluded.updated_at
+  `);
+
   return {
     upsertUserLink: ({ discordUserId, overseerrUserId, overseerrUsername }) => {
       upsertLinkStmt.run({
@@ -166,6 +182,29 @@ function initializeDatabase(logger) {
     },
     updateAdminPassword: ({ userId, passwordHash }) => {
       updateAdminPasswordStmt.run(passwordHash, userId);
+    },
+    getBotConfig: () => {
+      const rows = getAllBotConfigStmt.all();
+      const result = {};
+
+      for (const row of rows) {
+        result[row.key] = row.value;
+      }
+
+      return result;
+    },
+    saveBotConfig: (values) => {
+      const transaction = db.transaction((entries) => {
+        for (const [key, value] of entries) {
+          upsertBotConfigStmt.run({
+            key,
+            value: String(value ?? ""),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      });
+
+      transaction(Object.entries(values));
     }
   };
 }

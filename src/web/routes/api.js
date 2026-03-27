@@ -1,6 +1,53 @@
 const express = require("express");
 const { generateSessionToken, verifyPassword, hashPassword } = require("../../services/security");
 
+const DEFAULT_BOT_CONFIG = {
+  requestsChannelId: "",
+  uploadsChannelId: "",
+  updatesChannelId: "",
+  requestRoleId: "",
+  enforceRequestChannel: "false",
+  announceOnRequestCreated: "true",
+  announceOnAvailable: "true",
+  announceOnAnyStatus: "false",
+  dmOnStatusChange: "true",
+  mentionRequesterInChannel: "true",
+  useRichEmbeds: "true"
+};
+
+function asBoolString(value, fallback = "false") {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) {
+    return "true";
+  }
+  if (["false", "0", "no", "off"].includes(normalized)) {
+    return "false";
+  }
+  return fallback;
+}
+
+function normalizeId(value) {
+  const raw = String(value ?? "").trim();
+  return /^\d+$/.test(raw) ? raw : "";
+}
+
+function normalizeBotConfig(input) {
+  const source = input || {};
+  return {
+    requestsChannelId: normalizeId(source.requestsChannelId),
+    uploadsChannelId: normalizeId(source.uploadsChannelId),
+    updatesChannelId: normalizeId(source.updatesChannelId),
+    requestRoleId: normalizeId(source.requestRoleId),
+    enforceRequestChannel: asBoolString(source.enforceRequestChannel, DEFAULT_BOT_CONFIG.enforceRequestChannel),
+    announceOnRequestCreated: asBoolString(source.announceOnRequestCreated, DEFAULT_BOT_CONFIG.announceOnRequestCreated),
+    announceOnAvailable: asBoolString(source.announceOnAvailable, DEFAULT_BOT_CONFIG.announceOnAvailable),
+    announceOnAnyStatus: asBoolString(source.announceOnAnyStatus, DEFAULT_BOT_CONFIG.announceOnAnyStatus),
+    dmOnStatusChange: asBoolString(source.dmOnStatusChange, DEFAULT_BOT_CONFIG.dmOnStatusChange),
+    mentionRequesterInChannel: asBoolString(source.mentionRequesterInChannel, DEFAULT_BOT_CONFIG.mentionRequesterInChannel),
+    useRichEmbeds: asBoolString(source.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds)
+  };
+}
+
 function parseCookies(cookieHeader) {
   const result = {};
   const raw = cookieHeader || "";
@@ -181,6 +228,31 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
       ok: true,
       allowedKeys: envManager.allowedKeys,
       values: envManager.getCurrentSettings()
+    });
+  });
+
+  router.get("/admin/bot-config", authMiddleware, (req, res) => {
+    const merged = {
+      ...DEFAULT_BOT_CONFIG,
+      ...normalizeBotConfig(db.getBotConfig())
+    };
+
+    res.json({ ok: true, values: merged });
+  });
+
+  router.post("/admin/bot-config", authMiddleware, (req, res) => {
+    const values = req.body?.values;
+    if (!values || typeof values !== "object") {
+      return res.status(400).json({ error: "values object is required" });
+    }
+
+    const normalized = normalizeBotConfig(values);
+    db.saveBotConfig(normalized);
+
+    return res.json({
+      ok: true,
+      message: "Discord bot configuration saved.",
+      values: normalized
     });
   });
 

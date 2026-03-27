@@ -1,7 +1,28 @@
-const { Client, GatewayIntentBits, REST, Routes } = require("discord.js");
+const {
+  Client,
+  EmbedBuilder,
+  GatewayIntentBits,
+  MessageFlags,
+  REST,
+  Routes
+} = require("discord.js");
 const { buildCommands } = require("./commands");
 
 function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
+  const DEFAULT_BOT_CONFIG = {
+    requestsChannelId: "",
+    uploadsChannelId: "",
+    updatesChannelId: "",
+    requestRoleId: "",
+    enforceRequestChannel: false,
+    announceOnRequestCreated: true,
+    announceOnAvailable: true,
+    announceOnAnyStatus: false,
+    dmOnStatusChange: true,
+    mentionRequesterInChannel: true,
+    useRichEmbeds: true
+  };
+
   let online = false;
   const client = new Client({
     intents: [
@@ -10,6 +31,172 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       GatewayIntentBits.GuildMessages
     ]
   });
+
+  function toEphemeralResponse(content) {
+    return {
+      content,
+      flags: MessageFlags.Ephemeral
+    };
+  }
+
+  function asBoolean(value, fallback) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "off"].includes(normalized)) {
+      return false;
+    }
+    return fallback;
+  }
+
+  function normalizeId(value) {
+    const raw = String(value ?? "").trim();
+    return /^\d+$/.test(raw) ? raw : "";
+  }
+
+  function getBotConfig() {
+    const stored = db.getBotConfig();
+    return {
+      requestsChannelId: normalizeId(stored.requestsChannelId || DEFAULT_BOT_CONFIG.requestsChannelId),
+      uploadsChannelId: normalizeId(stored.uploadsChannelId || DEFAULT_BOT_CONFIG.uploadsChannelId),
+      updatesChannelId: normalizeId(stored.updatesChannelId || DEFAULT_BOT_CONFIG.updatesChannelId),
+      requestRoleId: normalizeId(stored.requestRoleId || DEFAULT_BOT_CONFIG.requestRoleId),
+      enforceRequestChannel: asBoolean(stored.enforceRequestChannel, DEFAULT_BOT_CONFIG.enforceRequestChannel),
+      announceOnRequestCreated: asBoolean(stored.announceOnRequestCreated, DEFAULT_BOT_CONFIG.announceOnRequestCreated),
+      announceOnAvailable: asBoolean(stored.announceOnAvailable, DEFAULT_BOT_CONFIG.announceOnAvailable),
+      announceOnAnyStatus: asBoolean(stored.announceOnAnyStatus, DEFAULT_BOT_CONFIG.announceOnAnyStatus),
+      dmOnStatusChange: asBoolean(stored.dmOnStatusChange, DEFAULT_BOT_CONFIG.dmOnStatusChange),
+      mentionRequesterInChannel: asBoolean(stored.mentionRequesterInChannel, DEFAULT_BOT_CONFIG.mentionRequesterInChannel),
+      useRichEmbeds: asBoolean(stored.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds)
+    };
+  }
+
+  async function sendToChannel(channelId, payload) {
+    if (!online || !channelId) {
+      return;
+    }
+
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !channel.isTextBased()) {
+        return;
+      }
+
+      await channel.send(payload);
+    } catch (error) {
+      logger.warn(`Failed to send message to channel ${channelId}: ${error.message}`);
+    }
+  }
+
+  function buildAnnouncementPayload({ title, description, color, fields, mention }) {
+    const cfg = getBotConfig();
+    if (!cfg.useRichEmbeds) {
+      const flat = [title, description]
+        .concat((fields || []).map((field) => `${field.name}: ${field.value}`))
+        .filter(Boolean)
+        .join("\n");
+      return {
+        content: mention ? `${mention} ${flat}` : flat
+      };
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle(title)
+      .setDescription(description || "")
+      .setColor(color || 0x6ae3b9)
+      .setTimestamp(new Date());
+
+    if (fields?.length) {
+      embed.addFields(fields);
+    }
+
+    return {
+      content: mention || undefined,
+      embeds: [embed]
+    };
+  }
+
+  async function announceRequestCreated({ title, mediaType, requestId, requesterDiscordId }) {
+    const cfg = getBotConfig();
+    if (!cfg.announceOnRequestCreated || !cfg.requestsChannelId) {
+      return;
+    }
+
+    const mention = cfg.requestRoleId
+      ? `<@&${cfg.requestRoleId}>`
+      : cfg.mentionRequesterInChannel && requesterDiscordId
+        ? `<@${requesterDiscordId}>`
+        : "";
+
+    const payload = buildAnnouncementPayload({
+      title: "New Media Request",
+      description: `${title} was requested and sent to Overseerr.`,
+      color: 0x4cc9f0,
+      mention,
+      fields: [
+        { name: "Type", value: mediaType || "unknown", inline: true },
+        { name: "Request ID", value: String(requestId || "unknown"), inline: true }
+      ]
+    });
+
+    await sendToChannel(cfg.requestsChannelId, payload);
+  }
+
+  async function announceRequestStatusChange({ title, requestId, statusText, status, requesterDiscordId }) {
+    const cfg = getBotConfig();
+    const isAvailable = Number(status) === 4;
+
+    const mention = cfg.mentionRequesterInChannel && requesterDiscordId ? `<@${requesterDiscordId}>` : "";
+
+    if (isAvailable && cfg.announceOnAvailable && cfg.uploadsChannelId) {
+      const payload = buildAnnouncementPayload({
+        title: "Media Is Now Available",
+        description: `${title} is now available in your media server.`,
+        color: 0x2ecc71,
+        mention,
+        fields: [
+          { name: "Request ID", value: String(requestId || "unknown"), inline: true },
+          { name: "Status", value: statusText || "Available", inline: true }
+        ]
+      });
+      await sendToChannel(cfg.uploadsChannelId, payload);
+    }
+
+    if (cfg.announceOnAnyStatus && cfg.updatesChannelId) {
+      const payload = buildAnnouncementPayload({
+        title: "Request Status Updated",
+        description: `${title} changed status.`,
+        color: 0xf9c74f,
+        mention,
+        fields: [
+          { name: "Request ID", value: String(requestId || "unknown"), inline: true },
+          { name: "Status", value: statusText || "Unknown", inline: true }
+        ]
+      });
+      await sendToChannel(cfg.updatesChannelId, payload);
+    }
+  }
+
+  function describeCommandError(error) {
+    const status = error?.response?.status;
+    const data = error?.response?.data;
+
+    if (!status) {
+      return error.message;
+    }
+
+    if (typeof data === "string") {
+      return `HTTP ${status}: ${data}`;
+    }
+
+    if (data && typeof data === "object") {
+      const detail = data.message || data.error || JSON.stringify(data);
+      return `HTTP ${status}: ${detail}`;
+    }
+
+    return `HTTP ${status}: ${error.message}`;
+  }
 
   async function registerSlashCommands() {
     const commands = buildCommands().map((command) => command.toJSON());
@@ -54,10 +241,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     const user = await overseerr.findUserByUsername(username);
 
     if (!user) {
-      await interaction.reply({
-        content: `No Overseerr user found for: ${username}`,
-        ephemeral: true
-      });
+      await interaction.reply(toEphemeralResponse(`No Overseerr user found for: ${username}`));
       return;
     }
 
@@ -67,10 +251,11 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       overseerrUsername: user.username || user.displayName || username
     });
 
-    await interaction.reply({
-      content: `Linked to Overseerr user: ${user.displayName || user.username} (id ${user.id})`,
-      ephemeral: true
-    });
+    await interaction.reply(
+      toEphemeralResponse(
+        `Linked to Overseerr user: ${user.displayName || user.username} (id ${user.id})`
+      )
+    );
   }
 
   async function handleSearch(interaction) {
@@ -78,13 +263,22 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     const mediaType = interaction.options.getString("media_type") || "all";
     const results = await overseerr.searchMedia(query, mediaType);
 
-    await interaction.reply({
-      content: formatSearchResults(results),
-      ephemeral: true
-    });
+    await interaction.reply(toEphemeralResponse(formatSearchResults(results)));
   }
 
   async function handleRequest(interaction) {
+    const botConfig = getBotConfig();
+    if (
+      botConfig.enforceRequestChannel &&
+      botConfig.requestsChannelId &&
+      interaction.channelId !== botConfig.requestsChannelId
+    ) {
+      await interaction.reply(
+        toEphemeralResponse(`Requests are restricted to <#${botConfig.requestsChannelId}>.`)
+      );
+      return;
+    }
+
     const mediaId = interaction.options.getInteger("media_id", true);
     const mediaType = interaction.options.getString("media_type", true);
     const userId = await resolveOverseerrUserId(interaction.user.id);
@@ -108,9 +302,17 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       });
     }
 
-    await interaction.reply({
-      content: `Request submitted: ${title} (request id ${requestId || "unknown"}, status ${overseerr.getRequestStatusText(status)}).`,
-      ephemeral: true
+    await interaction.reply(
+      toEphemeralResponse(
+        `Request submitted: ${title} (request id ${requestId || "unknown"}, status ${overseerr.getRequestStatusText(status)}).`
+      )
+    );
+
+    await announceRequestCreated({
+      title,
+      mediaType,
+      requestId,
+      requesterDiscordId: interaction.user.id
     });
   }
 
@@ -131,19 +333,13 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       requestedBy: request.requestedBy?.id
     });
 
-    await interaction.reply({
-      content: `Request #${request.id}: ${title} is currently ${statusText}.`,
-      ephemeral: true
-    });
+    await interaction.reply(toEphemeralResponse(`Request #${request.id}: ${title} is currently ${statusText}.`));
   }
 
   async function handleRecent(interaction) {
     const latest = await jellyfin.getLatestItems(8);
     if (latest.length === 0) {
-      await interaction.reply({
-        content: "No recent Jellyfin items found.",
-        ephemeral: true
-      });
+      await interaction.reply(toEphemeralResponse("No recent Jellyfin items found."));
       return;
     }
 
@@ -151,14 +347,16 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       .map((item) => `• ${item.name} (${item.type}${item.productionYear ? `, ${item.productionYear}` : ""})`)
       .join("\n");
 
-    await interaction.reply({
-      content: `Latest from Jellyfin:\n${lines}`,
-      ephemeral: true
-    });
+    await interaction.reply(toEphemeralResponse(`Latest from Jellyfin:\n${lines}`));
   }
 
   async function notifyDiscordUser(discordUserId, message) {
     if (!online) {
+      return;
+    }
+
+    const cfg = getBotConfig();
+    if (!cfg.dmOnStatusChange) {
       return;
     }
 
@@ -203,17 +401,12 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
           await handleRecent(interaction);
           break;
         default:
-          await interaction.reply({
-            content: "Unknown command.",
-            ephemeral: true
-          });
+          await interaction.reply(toEphemeralResponse("Unknown command."));
       }
     } catch (error) {
-      logger.error(`Command handling error: ${error.message}`);
-      const response = {
-        content: `Command failed: ${error.message}`,
-        ephemeral: true
-      };
+      const detail = describeCommandError(error);
+      logger.error(`Command handling error: ${detail}`);
+      const response = toEphemeralResponse(`Command failed: ${detail}`);
 
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(response);
@@ -236,6 +429,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       online = true;
     },
     notifyDiscordUser,
+    announceRequestStatusChange,
     getClient: () => client
   };
 }

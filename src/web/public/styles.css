@@ -126,10 +126,11 @@ pre {
   grid-column: 1 / -1;
 }
 
-#envForm {
+.settings-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.7rem;
+  margin-top: 0.8rem;
 }
 
 .admin-bar {
@@ -198,7 +199,7 @@ button {
     grid-template-columns: 1fr;
   }
 
-  #envForm {
+  .settings-form {
     grid-template-columns: 1fr;
   }
 }

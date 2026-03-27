@@ -7,6 +7,15 @@ async function fetchJson(url, options) {
   return data;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function setMessage(id, text, isError = false) {
   const el = document.getElementById(id);
   el.textContent = text || "";
@@ -20,6 +29,37 @@ function renderList(element, items, formatter) {
   }
 
   element.innerHTML = items.map(formatter).join("");
+}
+
+function showPanel(panelId) {
+  for (const id of ["setupPanel", "loginPanel", "dashboardPanel"]) {
+    const el = document.getElementById(id);
+    if (!el) {
+      continue;
+    }
+
+    if (id === panelId) {
+      el.classList.remove("hidden");
+    } else {
+      el.classList.add("hidden");
+    }
+  }
+}
+
+function renderEnvForm(targetId, allowedKeys, values) {
+  const form = document.getElementById(targetId);
+
+  form.innerHTML = allowedKeys
+    .map((key) => {
+      const safeValue = escapeHtml(values[key] || "");
+      return `
+        <label>
+          ${key}
+          <input name="${key}" type="text" value="${safeValue}" />
+        </label>
+      `;
+    })
+    .join("");
 }
 
 async function loadHealth() {
@@ -85,20 +125,7 @@ function wireForm() {
 
 async function loadEnvSettings() {
   const data = await fetchJson("/api/admin/env");
-  const form = document.getElementById("envForm");
-
-  form.innerHTML = data.allowedKeys
-    .map((key) => {
-      const value = data.values[key] || "";
-      const safeValue = value.replace(/"/g, "&quot;");
-      return `
-        <label>
-          ${key}
-          <input name="${key}" type="text" value="${safeValue}" />
-        </label>
-      `;
-    })
-    .join("");
+  renderEnvForm("envForm", data.allowedKeys, data.values);
 }
 
 async function saveEnvSettings() {
@@ -130,9 +157,12 @@ async function checkSession() {
   }
 }
 
+async function loadSetupStatus() {
+  return fetchJson("/api/setup/status");
+}
+
 async function showDashboard(user) {
-  document.getElementById("loginPanel").classList.add("hidden");
-  document.getElementById("dashboardPanel").classList.remove("hidden");
+  showPanel("dashboardPanel");
   document.getElementById("sessionUser").textContent = `Logged in as ${user.username}`;
 
   wireForm();
@@ -145,10 +175,53 @@ async function showDashboard(user) {
 }
 
 function wireAuth() {
+  const setupForm = document.getElementById("setupForm");
   const loginForm = document.getElementById("loginForm");
   const logoutBtn = document.getElementById("logoutBtn");
   const saveEnvBtn = document.getElementById("saveEnvBtn");
   const passwordForm = document.getElementById("passwordForm");
+
+  setupForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const formData = new FormData(setupForm);
+    const password = String(formData.get("password") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+
+    if (password !== confirmPassword) {
+      setMessage("setupResult", "Passwords do not match.", true);
+      return;
+    }
+
+    const envValues = {};
+    for (const [key, value] of formData.entries()) {
+      if (!["username", "password", "confirmPassword"].includes(key)) {
+        envValues[key] = String(value || "");
+      }
+    }
+
+    try {
+      const response = await fetchJson("/api/setup/initialize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          username: String(formData.get("username") || "").trim(),
+          password,
+          values: envValues
+        })
+      });
+
+      setMessage(
+        "setupResult",
+        "First-run setup complete. Restart after changing Discord credentials if you filled them in now."
+      );
+      await showDashboard({ username: response.username });
+    } catch (error) {
+      setMessage("setupResult", error.message, true);
+    }
+  });
 
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -216,6 +289,15 @@ function wireAuth() {
 
 async function init() {
   wireAuth();
+
+  const setup = await loadSetupStatus();
+  if (setup.setupRequired) {
+    renderEnvForm("setupEnvForm", setup.allowedKeys, setup.values);
+    showPanel("setupPanel");
+    return;
+  }
+
+  showPanel("loginPanel");
 
   const user = await checkSession();
   if (user) {

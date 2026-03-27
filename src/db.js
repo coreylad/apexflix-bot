@@ -1,7 +1,6 @@
 const fs = require("fs");
 const path = require("path");
 const Database = require("better-sqlite3");
-const { hashPassword } = require("./services/security");
 
 function initializeDatabase(logger) {
   const dataDir = path.join(process.cwd(), "data");
@@ -121,14 +120,6 @@ function initializeDatabase(logger) {
     "UPDATE admin_users SET password_hash = ? WHERE id = ?"
   );
 
-  const adminCount = countAdminsStmt.get()?.count || 0;
-  if (adminCount === 0) {
-    insertAdminStmt.run("admin", hashPassword("admin12345"), new Date().toISOString());
-    logger.warn(
-      "No admin user found. Created default web login: username=admin password=admin12345"
-    );
-  }
-
   return {
     upsertUserLink: ({ discordUserId, overseerrUserId, overseerrUsername }) => {
       upsertLinkStmt.run({
@@ -156,6 +147,11 @@ function initializeDatabase(logger) {
     },
     getRequestEventById: (requestId) => getRequestByIdStmt.get(requestId) || null,
     getRecentRequestEvents: (limit = 20) => getRecentRequestsStmt.all(limit),
+    countAdminUsers: () => countAdminsStmt.get()?.count || 0,
+    createAdminUser: ({ username, passwordHash }) => {
+      const result = insertAdminStmt.run(username, passwordHash, new Date().toISOString());
+      return result.lastInsertRowid;
+    },
     findAdminByUsername: (username) => findAdminByUsernameStmt.get(username) || null,
     findAdminById: (id) => findAdminByIdStmt.get(id) || null,
     createSession: ({ token, userId, expiresAt }) => {

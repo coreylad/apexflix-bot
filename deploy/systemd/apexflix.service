@@ -1,0 +1,19 @@
+[Unit]
+Description=ApexFlix Community Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=apexflix
+Group=apexflix
+WorkingDirectory=/opt/apexflix
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

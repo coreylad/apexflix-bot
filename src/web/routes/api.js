@@ -52,6 +52,19 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
 
+  function issueSession(res, userId, username) {
+    const token = generateSessionToken();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
+    db.createSession({ token, userId, expiresAt });
+
+    res.setHeader(
+      "Set-Cookie",
+      `apexflix_session=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=604800; SameSite=Lax`
+    );
+
+    return res.json({ ok: true, username });
+  }
+
   router.get("/health", (req, res) => {
     res.json({
       ok: true,
@@ -61,7 +74,59 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
     });
   });
 
+  router.get("/setup/status", (req, res) => {
+    const setupRequired = db.countAdminUsers() === 0;
+    res.json({
+      ok: true,
+      setupRequired,
+      allowedKeys: envManager.allowedKeys,
+      values: envManager.getCurrentSettings()
+    });
+  });
+
+  router.post("/setup/initialize", (req, res) => {
+    if (db.countAdminUsers() > 0) {
+      return res.status(409).json({ error: "Setup is already complete" });
+    }
+
+    const username = String(req.body?.username || "").trim();
+    const password = String(req.body?.password || "");
+    const values = req.body?.values;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password are required" });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    if (!values || typeof values !== "object") {
+      return res.status(400).json({ error: "Configuration values are required" });
+    }
+
+    if (db.findAdminByUsername(username)) {
+      return res.status(409).json({ error: "Username already exists" });
+    }
+
+    const userId = db.createAdminUser({
+      username,
+      passwordHash: hashPassword(password)
+    });
+
+    envManager.saveSettings(values);
+    if (typeof config.refreshConfigFromProcess === "function") {
+      config.refreshConfigFromProcess();
+    }
+
+    return issueSession(res, Number(userId), username);
+  });
+
   router.post("/auth/login", (req, res) => {
+    if (db.countAdminUsers() === 0) {
+      return res.status(409).json({ error: "Setup is not complete yet" });
+    }
+
     const username = String(req.body?.username || "").trim();
     const password = String(req.body?.password || "");
 
@@ -74,16 +139,7 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const token = generateSessionToken();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
-    db.createSession({ token, userId: user.id, expiresAt });
-
-    res.setHeader(
-      "Set-Cookie",
-      `apexflix_session=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=604800; SameSite=Lax`
-    );
-
-    return res.json({ ok: true, username: user.username });
+    return issueSession(res, user.id, user.username);
   });
 
   router.post("/auth/logout", authMiddleware, (req, res) => {

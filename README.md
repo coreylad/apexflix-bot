@@ -13,6 +13,7 @@ A self-contained Node.js app that runs:
 - Request status checks and DM notifications on status changes
 - Web UI for health, recent requests, and latest Jellyfin items
 - Private web login with session-based authentication
+- First-run setup wizard with admin user creation
 - In-browser `.env` editor (no manual file editing needed)
 - Single-process Node runtime (bot + API + dashboard)
 
@@ -24,6 +25,10 @@ A self-contained Node.js app that runs:
 - Discord bot token and app/client ID
 
 ## Quick Start (Linux-first)
+
+For a full deployment walkthrough, see [docs/SETUP.md](docs/SETUP.md).
+
+For a ready-to-use Linux service unit, see [deploy/systemd/apexflix.service](deploy/systemd/apexflix.service).
 
 1. Install dependencies:
 
@@ -69,12 +74,12 @@ npm start
 - Recent requests: `GET /api/requests/recent`
 - Latest Jellyfin items: `GET /api/jellyfin/latest`
 
-### Default admin login
+### First Run
 
-- Username: `admin`
-- Password: `admin12345`
-
-Change this password immediately from the dashboard.
+On a new install, the web UI opens a setup wizard where you:
+- create the first admin account
+- save Discord, Jellyfin, and Overseerr settings
+- continue directly into the private dashboard
 
 ## Notes
 
@@ -83,3 +88,4 @@ Change this password immediately from the dashboard.
 - For DM notifications, users must allow server DMs or share a mutual server with the bot.
 - Saving env values from the web UI updates runtime settings for web integrations immediately.
 - If you change Discord token/client/guild values, restart the app to reconnect the bot with new credentials.
+- On existing databases that already contain an admin user, the login screen appears instead of first-run setup.

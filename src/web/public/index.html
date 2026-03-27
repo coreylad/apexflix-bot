@@ -26,12 +26,33 @@
         </p>
       </header>
 
-      <section id="loginPanel" class="card auth-card">
-        <h2>Private Login</h2>
+      <section id="setupPanel" class="card auth-card hidden">
+        <h2>First-Run Setup</h2>
         <p class="muted">
-          Default credentials on first run: <strong>admin / admin12345</strong>. Change
-          the password after login.
+          Create the first admin user and save your app configuration without editing files.
         </p>
+        <form id="setupForm">
+          <label>
+            Admin Username
+            <input name="username" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            Admin Password
+            <input name="password" type="password" autocomplete="new-password" minlength="8" required />
+          </label>
+          <label>
+            Confirm Password
+            <input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required />
+          </label>
+          <div id="setupEnvForm" class="settings-form"></div>
+          <button type="submit">Create Admin And Save Configuration</button>
+        </form>
+        <p id="setupResult"></p>
+      </section>
+
+      <section id="loginPanel" class="card auth-card hidden">
+        <h2>Private Login</h2>
+        <p class="muted">Sign in with the admin account created during first-run setup.</p>
         <form id="loginForm">
           <label>
             Username
@@ -94,7 +115,7 @@
         <article class="card env-card">
           <h2>.env Editor</h2>
           <p class="muted">Save app credentials and runtime settings directly from the browser.</p>
-          <form id="envForm"></form>
+          <form id="envForm" class="settings-form"></form>
           <div class="admin-actions">
             <button id="saveEnvBtn" type="button">Save Environment</button>
           </div>

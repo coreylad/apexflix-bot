@@ -26,6 +26,14 @@ function optional(name, fallback = "") {
   return process.env[name] || fallback;
 }
 
+function optionalTrimmed(name, fallback = "") {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || raw === "") {
+    return fallback;
+  }
+  return String(raw).trim();
+}
+
 function firstDefined(names, fallback = "") {
   for (const name of names) {
     const value = process.env[name];
@@ -50,12 +58,12 @@ function refreshConfigFromProcess() {
   config.discord.guildId = optional("DISCORD_GUILD_ID");
 
   config.overseerr.url = firstDefined(["OVERSEERR_URL", "OVERSEERR_BASE_URL"]).replace(/\/$/, "");
-  config.overseerr.apiKey = optional("OVERSEERR_API_KEY");
+  config.overseerr.apiKey = optionalTrimmed("OVERSEERR_API_KEY");
   config.overseerr.defaultUserId = optionalNumber("OVERSEERR_DEFAULT_USER_ID", 1);
   config.overseerr.allowInsecureTls = optionalBoolean("OVERSEERR_ALLOW_INSECURE_TLS", false);
 
   config.lidarr.url = firstDefined(["LIDARR_URL", "LIDARR_BASE_URL"]).replace(/\/$/, "");
-  config.lidarr.apiKey = optional("LIDARR_API_KEY");
+  config.lidarr.apiKey = optionalTrimmed("LIDARR_API_KEY");
   config.lidarr.allowInsecureTls = optionalBoolean("LIDARR_ALLOW_INSECURE_TLS", false);
   config.lidarr.rootFolderPath = optional("LIDARR_ROOT_FOLDER");
   config.lidarr.qualityProfileId = optionalNumber("LIDARR_QUALITY_PROFILE_ID", 0);
@@ -66,9 +74,9 @@ function refreshConfigFromProcess() {
   config.lidarr.searchForMissingAlbums = optionalBoolean("LIDARR_SEARCH_FOR_MISSING_ALBUMS", true);
 
   config.jellyfin.url = firstDefined(["JELLYFIN_URL", "JELLYFIN_BASE_URL"]).replace(/\/$/, "");
-  config.jellyfin.apiKey = optional("JELLYFIN_API_KEY");
-  config.jellyfin.userId = optional("JELLYFIN_USER_ID");
-  config.jellyfin.username = optional("JELLYFIN_USERNAME");
+  config.jellyfin.apiKey = optionalTrimmed("JELLYFIN_API_KEY");
+  config.jellyfin.userId = optionalTrimmed("JELLYFIN_USER_ID");
+  config.jellyfin.username = optionalTrimmed("JELLYFIN_USERNAME");
   config.jellyfin.clientName = optional("JELLYFIN_CLIENT_NAME", "ApexFlix");
   config.jellyfin.deviceName = optional("JELLYFIN_DEVICE_NAME", "ApexFlix Bot");
   config.jellyfin.deviceId = optional("JELLYFIN_DEVICE_ID", "apexflix-bot");

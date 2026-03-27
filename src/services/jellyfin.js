@@ -2,6 +2,9 @@ const axios = require("axios");
 const https = require("https");
 
 function createJellyfinClient(config) {
+  let authBackoffUntil = 0;
+  const AUTH_BACKOFF_MS = 2 * 60 * 1000;
+
   function normalizedBaseUrl() {
     const raw = String(config.url || "").trim();
     if (!raw) {
@@ -69,6 +72,14 @@ function createJellyfinClient(config) {
   }
 
   function getClient() {
+    const now = Date.now();
+    if (authBackoffUntil > now) {
+      const retryInSeconds = Math.max(1, Math.ceil((authBackoffUntil - now) / 1000));
+      throw new Error(
+        `Jellyfin authentication failed recently (invalid token). Retry in ${retryInSeconds}s or update JELLYFIN_API_KEY.`
+      );
+    }
+
     const base = normalizedBaseUrl();
     ensureConfigured();
     const httpsAgent =
@@ -76,7 +87,7 @@ function createJellyfinClient(config) {
         ? new https.Agent({ rejectUnauthorized: false })
         : undefined;
 
-    return axios.create({
+    const client = axios.create({
       headers: {
         Authorization: buildAuthorizationHeader(),
         "X-Emby-Token": config.apiKey,
@@ -85,6 +96,22 @@ function createJellyfinClient(config) {
       timeout: 15000,
       httpsAgent
     });
+
+    client.interceptors.response.use(
+      (response) => {
+        authBackoffUntil = 0;
+        return response;
+      },
+      (error) => {
+        const status = Number(error?.response?.status || 0);
+        if (status === 401 || status === 403) {
+          authBackoffUntil = Date.now() + AUTH_BACKOFF_MS;
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return client;
   }
 
   async function resolveUserId(client) {

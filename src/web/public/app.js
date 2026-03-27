@@ -410,9 +410,10 @@ async function loadDashboardStats() {
     document.getElementById("statMovies").textContent = data.movieCount ?? "";
     document.getElementById("statSeries").textContent = data.seriesCount ?? "";
     document.getElementById("statEpisodes").textContent = data.episodeCount ?? "";
+    document.getElementById("statMusic").textContent = data.songCount ?? "";
     document.getElementById("statStreams").textContent = data.activeSessions ?? "";
   } catch {
-    ["statMovies", "statSeries", "statEpisodes", "statStreams"].forEach(
+    ["statMovies", "statSeries", "statEpisodes", "statMusic", "statStreams"].forEach(
       (id) => (document.getElementById(id).textContent = "")
     );
   }

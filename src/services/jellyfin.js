@@ -51,11 +51,11 @@ function createJellyfinClient(config) {
   function buildAuthorizationHeader() {
     const apiKey = normalizedApiKey();
     return [
-      `MediaBrowser Token=\"${escapeHeaderValue(apiKey)}\"`,
       `Client=\"${escapeHeaderValue(config.clientName || "ApexFlix")}\"`,
       `Device=\"${escapeHeaderValue(config.deviceName || "ApexFlix Bot")}\"`,
       `DeviceId=\"${escapeHeaderValue(config.deviceId || "apexflix-bot")}\"`,
-      `Version=\"${escapeHeaderValue(config.clientVersion || "1.0.0")}\"`
+      `Version=\"${escapeHeaderValue(config.clientVersion || "1.0.0")}\"`,
+      `Token=\"${escapeHeaderValue(apiKey)}\"`
     ].join(", ");
   }
 
@@ -98,9 +98,14 @@ function createJellyfinClient(config) {
 
     const client = axios.create({
       headers: {
-        Authorization: buildAuthorizationHeader(),
+        Authorization: `MediaBrowser ${buildAuthorizationHeader()}`,
+        "X-Emby-Authorization": `MediaBrowser ${buildAuthorizationHeader()}`,
         "X-Emby-Token": apiKey,
+        "X-MediaBrowser-Token": apiKey,
         "Content-Type": "application/json"
+      },
+      params: {
+        api_key: apiKey
       },
       timeout: 15000,
       httpsAgent

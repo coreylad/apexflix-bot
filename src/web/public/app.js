@@ -543,6 +543,20 @@ function wireRequestForm() {
   if (!form || form.dataset.wired) return;
   form.dataset.wired = "1";
 
+  // Toggle season field visibility based on media type
+  const mediaTypeSelect = form.querySelector("select[name='mediaType']");
+  const seasonLabel = document.getElementById("seasonLabel");
+  
+  function updateSeasonVisibility() {
+    const mediaType = mediaTypeSelect.value;
+    seasonLabel.style.display = mediaType === "tv" ? "block" : "none";
+  }
+  
+  if (mediaTypeSelect) {
+    mediaTypeSelect.addEventListener("change", updateSeasonVisibility);
+    updateSeasonVisibility(); // Initial state
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     clearMsg("requestMsg");

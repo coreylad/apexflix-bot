@@ -7,13 +7,16 @@ const {
   ModalBuilder,
   REST,
   Routes,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle
 } = require("discord.js");
 const { buildCommands } = require("./commands");
 
-const REQUEST_MODAL_ID = "apexflix-request-modal";
-const REQUEST_MODAL_MEDIA_TYPE = "media_type";
+const REQUEST_MEDIA_TYPE_SELECT_ID = "request-media-type-select";
+const REQUEST_MODAL_ID_MOVIE = "apexflix-request-modal-movie";
+const REQUEST_MODAL_ID_TV = "apexflix-request-modal-tv";
+const REQUEST_MODAL_ID_MUSIC = "apexflix-request-modal-music";
 const REQUEST_MODAL_MEDIA_ID = "media_id";
 const REQUEST_MODAL_SEASON = "season";
 
@@ -678,40 +681,59 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     return 0;
   }
 
-  function buildRequestModal() {
-    const modal = new ModalBuilder()
-      .setCustomId(REQUEST_MODAL_ID)
-      .setTitle("Request Media");
+  function buildMediaTypeSelectMenu() {
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(REQUEST_MEDIA_TYPE_SELECT_ID)
+      .setPlaceholder("Choose media type...")
+      .addOptions([
+        { label: "Movie", value: "movie", description: "Request a movie" },
+        { label: "TV Series", value: "tv", description: "Request a TV show" },
+        { label: "Music Artist", value: "music", description: "Request a music artist" }
+      ]);
 
-    const mediaType = new TextInputBuilder()
-      .setCustomId(REQUEST_MODAL_MEDIA_TYPE)
-      .setLabel("Media Type (movie, tv, or music)")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setPlaceholder("movie")
-      .setMaxLength(10);
+    return new ActionRowBuilder().addComponents(select);
+  }
+
+  function buildRequestModal(mediaType) {
+    const isTV = mediaType === "tv";
+    let modalId;
+    if (mediaType === "movie") modalId = REQUEST_MODAL_ID_MOVIE;
+    else if (mediaType === "tv") modalId = REQUEST_MODAL_ID_TV;
+    else if (mediaType === "music") modalId = REQUEST_MODAL_ID_MUSIC;
+
+    const mediaLabel = mediaType === "music" 
+      ? "Artist name or MBID" 
+      : "TMDB ID or URL";
+    const mediaPlaceholder = mediaType === "music" 
+      ? "Artist name or MusicBrainz ID" 
+      : "1399 or TMDB URL";
+
+    const modal = new ModalBuilder()
+      .setCustomId(modalId)
+      .setTitle(mediaType === "movie" ? "Request Movie" : mediaType === "tv" ? "Request TV Series" : "Request Music Artist");
 
     const mediaId = new TextInputBuilder()
       .setCustomId(REQUEST_MODAL_MEDIA_ID)
-      .setLabel("TMDB ID/URL or music artist query")
+      .setLabel(mediaLabel)
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
-      .setPlaceholder("1399, TMDB URL, or artist name/MBID")
+      .setPlaceholder(mediaPlaceholder)
       .setMaxLength(200);
 
-    const season = new TextInputBuilder()
-      .setCustomId(REQUEST_MODAL_SEASON)
-      .setLabel("Season (TV only: 1, all, latest)")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false)
-      .setPlaceholder("1")
-      .setMaxLength(30);
+    modal.addComponents(new ActionRowBuilder().addComponents(mediaId));
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(mediaType),
-      new ActionRowBuilder().addComponents(mediaId),
-      new ActionRowBuilder().addComponents(season)
-    );
+    // Only add season field for TV requests
+    if (isTV) {
+      const season = new TextInputBuilder()
+        .setCustomId(REQUEST_MODAL_SEASON)
+        .setLabel("Season (1, all, latest)")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder("1")
+        .setMaxLength(30);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(season));
+    }
 
     return modal;
   }
@@ -1458,28 +1480,19 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
   }
 
   async function handleRequest(interaction) {
-    await interaction.showModal(buildRequestModal());
+    await interaction.reply({
+      components: [buildMediaTypeSelectMenu()],
+      flags: MessageFlags.Ephemeral
+    });
   }
 
-  async function handleRequestModalSubmit(interaction) {
-    const mediaTypeInput = String(
-      interaction.fields.getTextInputValue(REQUEST_MODAL_MEDIA_TYPE) || ""
-    )
-      .trim()
-      .toLowerCase();
+  async function handleRequestModalSubmit(interaction, mediaType) {
     const mediaIdInput = interaction.fields.getTextInputValue(REQUEST_MODAL_MEDIA_ID);
     const seasonInput = String(
       interaction.fields.getTextInputValue(REQUEST_MODAL_SEASON) || ""
     ).trim();
 
-    if (!["movie", "tv", "music"].includes(mediaTypeInput)) {
-      await interaction.reply(
-        toEphemeralResponse("Media type must be 'movie', 'tv', or 'music'.")
-      );
-      return;
-    }
-
-    if (mediaTypeInput === "music") {
+    if (mediaType === "music") {
       const musicQuery = String(mediaIdInput || "").trim();
       if (!musicQuery) {
         await interaction.reply(
@@ -1489,7 +1502,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
       }
 
       await processRequestSubmission(interaction, {
-        mediaType: mediaTypeInput,
+        mediaType,
         mediaInput: musicQuery,
         seasonInput: ""
       });
@@ -1505,7 +1518,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     }
 
     await processRequestSubmission(interaction, {
-      mediaType: mediaTypeInput,
+      mediaType,
       mediaInput: parsedMediaId,
       seasonInput
     });
@@ -1896,10 +1909,23 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
   });
 
   client.on("interactionCreate", async (interaction) => {
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === REQUEST_MEDIA_TYPE_SELECT_ID) {
+        const mediaType = interaction.values[0];
+        await interaction.showModal(buildRequestModal(mediaType));
+      }
+      return;
+    }
+
     if (interaction.isModalSubmit()) {
-      if (interaction.customId === REQUEST_MODAL_ID) {
+      let mediaType = null;
+      if (interaction.customId === REQUEST_MODAL_ID_MOVIE) mediaType = "movie";
+      else if (interaction.customId === REQUEST_MODAL_ID_TV) mediaType = "tv";
+      else if (interaction.customId === REQUEST_MODAL_ID_MUSIC) mediaType = "music";
+
+      if (mediaType) {
         try {
-          await handleRequestModalSubmit(interaction);
+          await handleRequestModalSubmit(interaction, mediaType);
         } catch (error) {
           const detail = describeCommandError(error);
           logger.error(`Request modal handling error: ${detail}`);

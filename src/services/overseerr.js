@@ -229,6 +229,14 @@ function createOverseerrClient(config) {
   }
 
   function formatProgressValue(entry) {
+    const size = Number(entry?.size);
+    const sizeLeft = Number(entry?.sizeLeft ?? entry?.sizeleft);
+    if (Number.isFinite(size) && size > 0 && Number.isFinite(sizeLeft) && sizeLeft >= 0) {
+      const progressFromSize = ((size - sizeLeft) / size) * 100;
+      const clampedFromSize = Math.max(0, Math.min(100, progressFromSize));
+      return `${Math.round(clampedFromSize)}%`;
+    }
+
     const candidates = [
       entry?.progress,
       entry?.percentage,
@@ -242,6 +250,25 @@ function createOverseerrClient(config) {
       if (Number.isFinite(numeric) && numeric >= 0) {
         const clamped = Math.max(0, Math.min(100, numeric));
         return `${Math.round(clamped)}%`;
+      }
+    }
+
+    return "";
+  }
+
+  function formatEtaValue(entry) {
+    const rawTimeLeft = String(entry?.timeLeft ?? entry?.timeleft ?? "").trim();
+    if (rawTimeLeft) {
+      return rawTimeLeft;
+    }
+
+    const completion = entry?.estimatedCompletionTime;
+    if (completion) {
+      const date = new Date(completion);
+      if (!Number.isNaN(date.getTime())) {
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        return `${hours}:${minutes}`;
       }
     }
 
@@ -268,10 +295,19 @@ function createOverseerrClient(config) {
           "Item"
         );
         const progress = formatProgressValue(entry);
+        const eta = formatEtaValue(entry);
         const state = firstNonEmpty([entry?.state, entry?.status], "");
+
+        if (progress && eta) {
+          return `${label} ${progress} ETA ${eta}`;
+        }
 
         if (progress) {
           return `${label} ${progress}`;
+        }
+
+        if (eta) {
+          return `${label} ETA ${eta}`;
         }
 
         if (state) {

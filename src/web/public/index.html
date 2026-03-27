@@ -1,9 +1,9 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ApexFlix â€” Media Server Dashboard</title>
+    <title>ApexFlix  Media Server Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,7 +17,7 @@
     <div class="bg-orb orb-2"></div>
     <div class="bg-orb orb-3"></div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• SETUP SCREEN â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!--  SETUP SCREEN  -->
     <div id="setupScreen" class="auth-wrap hidden">
       <div class="auth-box">
         <div class="brand">
@@ -38,7 +38,7 @@
       </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGIN SCREEN â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!--  LOGIN SCREEN  -->
     <div id="loginScreen" class="auth-wrap hidden">
       <div class="auth-box">
         <div class="brand">
@@ -56,10 +56,10 @@
       </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• APP SHELL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!--  APP SHELL  -->
     <div id="appShell" class="app-shell hidden">
 
-      <!-- â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!--  Sidebar  -->
       <nav class="sidebar">
         <div class="sidebar-header">
           <div class="sidebar-brand">
@@ -77,51 +77,51 @@
         <div class="sidebar-nav">
           <div class="nav-section-label">Overview</div>
           <button class="nav-btn active" data-tab="tabDashboard">
-            <span class="nav-icon">â¬¡</span> Dashboard
+            <span class="nav-icon"></span> Dashboard
           </button>
 
           <div class="nav-section-label">Media</div>
           <button class="nav-btn" data-tab="tabRequests">
-            <span class="nav-icon">ðŸ“‹</span> Requests
+            <span class="nav-icon"></span> Requests
             <span class="nav-badge" id="badgeRequests"></span>
           </button>
           <button class="nav-btn" data-tab="tabJellyfin">
-            <span class="nav-icon">ðŸŽ¬</span> Jellyfin
+            <span class="nav-icon"></span> Jellyfin
           </button>
           <button class="nav-btn" data-tab="tabReports">
-            <span class="nav-icon">ðŸš¨</span> Reports
+            <span class="nav-icon"></span> Reports
             <span class="nav-badge" id="badgeReports"></span>
           </button>
 
           <div class="nav-section-label">Configuration</div>
           <button class="nav-btn" data-tab="tabBotConfig">
-            <span class="nav-icon">ðŸ¤–</span> Bot Config
+            <span class="nav-icon"></span> Bot Config
           </button>
           <button class="nav-btn" data-tab="tabChannels">
-            <span class="nav-icon">ðŸ“¡</span> Channels
+            <span class="nav-icon"></span> Channels
           </button>
           <button class="nav-btn" data-tab="tabEnvironment">
-            <span class="nav-icon">âš™ï¸</span> Environment
+            <span class="nav-icon"></span> Environment
           </button>
 
           <div class="nav-section-label">Admin</div>
           <button class="nav-btn" data-tab="tabLogs">
-            <span class="nav-icon">📜</span> Logs
+            <span class="nav-icon"></span> Logs
             <span class="nav-badge" id="badgeLogs"></span>
           </button>
           <button class="nav-btn" data-tab="tabSystem">
-            <span class="nav-icon">ðŸ–¥ï¸</span> System
+            <span class="nav-icon"></span> System
           </button>
         </div>
 
         <div class="sidebar-footer">
           <button class="nav-btn btn-danger" id="logoutBtn">
-            <span class="nav-icon">â†©</span> Logout
+            <span class="nav-icon"></span> Logout
           </button>
         </div>
       </nav>
 
-      <!-- â”€â”€ Main Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!--  Main Content  -->
       <div class="main-content">
         <div class="top-bar">
           <span class="top-bar-title" id="topBarTitle">Dashboard</span>
@@ -132,7 +132,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: Dashboard  -->
         <div id="tabDashboard" class="tab-pane active">
           <p class="pane-title">Dashboard</p>
           <p class="pane-sub">Live overview of your media server and bot activity.</p>
@@ -140,22 +140,22 @@
           <div class="grid-4" style="margin-bottom:1rem">
             <div class="stat-card">
               <div class="stat-label">Movies</div>
-              <div class="stat-value blue" id="statMovies">â€”</div>
+              <div class="stat-value blue" id="statMovies"></div>
               <div class="stat-sub">in Jellyfin library</div>
             </div>
             <div class="stat-card">
               <div class="stat-label">Series</div>
-              <div class="stat-value purple" id="statSeries">â€”</div>
+              <div class="stat-value purple" id="statSeries"></div>
               <div class="stat-sub">in Jellyfin library</div>
             </div>
             <div class="stat-card">
               <div class="stat-label">Episodes</div>
-              <div class="stat-value accent" id="statEpisodes">â€”</div>
+              <div class="stat-value accent" id="statEpisodes"></div>
               <div class="stat-sub">total episodes</div>
             </div>
             <div class="stat-card">
               <div class="stat-label">Active Streams</div>
-              <div class="stat-value green" id="statStreams">â€”</div>
+              <div class="stat-value green" id="statStreams"></div>
               <div class="stat-sub">right now</div>
             </div>
           </div>
@@ -164,20 +164,20 @@
             <div class="card">
               <div class="card-header">
                 <div>
-                  <div class="card-title">ðŸŽ® Now Playing</div>
+                  <div class="card-title"> Now Playing</div>
                   <div class="card-subtitle">Live Jellyfin sessions</div>
                 </div>
                 <button class="btn-secondary btn-sm" id="dashRefreshNowPlaying">Refresh</button>
               </div>
               <div id="dashNowPlaying">
-                <div class="empty-state"><div class="empty-icon">ðŸ“º</div>No active playback</div>
+                <div class="empty-state"><div class="empty-icon"></div>No active playback</div>
               </div>
             </div>
 
             <div class="card">
               <div class="card-header">
                 <div>
-                  <div class="card-title">ðŸ†• Recently Added</div>
+                  <div class="card-title"> Recently Added</div>
                   <div class="card-subtitle">Latest items in Jellyfin</div>
                 </div>
                 <button class="btn-secondary btn-sm" id="dashRefreshLatest">Refresh</button>
@@ -185,7 +185,7 @@
               <div class="table-wrap">
                 <table class="data-table">
                   <thead><tr><th>Title</th><th>Type</th><th>Year</th></tr></thead>
-                  <tbody id="dashLatest"><tr><td colspan="3" class="empty-state">Loadingâ€¦</td></tr></tbody>
+                  <tbody id="dashLatest"><tr><td colspan="3" class="empty-state">Loading</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -193,7 +193,7 @@
             <div class="card col-span-2">
               <div class="card-header">
                 <div>
-                  <div class="card-title">ðŸ“‹ Recent Requests</div>
+                  <div class="card-title"> Recent Requests</div>
                   <div class="card-subtitle">Latest Overseerr activity</div>
                 </div>
                 <div style="display:flex;gap:0.5rem">
@@ -204,7 +204,7 @@
               <div class="table-wrap">
                 <table class="data-table">
                   <thead><tr><th>#</th><th>Title</th><th>Type</th><th>Status</th><th>Updated</th></tr></thead>
-                  <tbody id="dashRequests"><tr><td colspan="5" class="empty-state">Loadingâ€¦</td></tr></tbody>
+                  <tbody id="dashRequests"><tr><td colspan="5" class="empty-state">Loading</td></tr></tbody>
                 </table>
               </div>
               <div id="dashBackfillMsg" class="msg"></div>
@@ -212,7 +212,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: Requests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: Requests  -->
         <div id="tabRequests" class="tab-pane">
           <p class="pane-title">Requests</p>
           <p class="pane-sub">Submit and track Overseerr media requests.</p>
@@ -228,14 +228,14 @@
               <form id="requestForm" style="display:grid;gap:0.9rem">
                 <label>Media Type
                   <select name="mediaType">
-                    <option value="movie">ðŸŽ¬ Movie</option>
-                    <option value="tv">ðŸ“º TV Series</option>
+                    <option value="movie"> Movie</option>
+                    <option value="tv"> TV Series</option>
                   </select>
                 </label>
                 <label>TMDB ID or URL
                   <input type="text" name="mediaId" placeholder="e.g. 1399 or https://www.themoviedb.org/tv/1399" />
                 </label>
-                <label>Season (TV only â€” 1, all, latest)
+                <label>Season (TV only  1, all, latest)
                   <input type="text" name="season" placeholder="Leave blank for movies" />
                 </label>
                 <button type="submit" class="btn-primary">Submit Request</button>
@@ -254,14 +254,14 @@
               <div class="table-wrap">
                 <table class="data-table">
                   <thead><tr><th>#</th><th>Title</th><th>Type</th><th>Status</th></tr></thead>
-                  <tbody id="reqTableBody"><tr><td colspan="4" class="empty-state">Loadingâ€¦</td></tr></tbody>
+                  <tbody id="reqTableBody"><tr><td colspan="4" class="empty-state">Loading</td></tr></tbody>
                 </table>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: Jellyfin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: Jellyfin  -->
         <div id="tabJellyfin" class="tab-pane">
           <p class="pane-title">Jellyfin</p>
           <p class="pane-sub">Live library stats, now playing, and manual snapshot publishing.</p>
@@ -269,19 +269,19 @@
           <div class="grid-4" style="margin-bottom:1rem">
             <div class="stat-card">
               <div class="stat-label">Movies</div>
-              <div class="stat-value blue" id="jellyMovies">â€”</div>
+              <div class="stat-value blue" id="jellyMovies"></div>
             </div>
             <div class="stat-card">
               <div class="stat-label">Series</div>
-              <div class="stat-value purple" id="jellySeries">â€”</div>
+              <div class="stat-value purple" id="jellySeries"></div>
             </div>
             <div class="stat-card">
               <div class="stat-label">Episodes</div>
-              <div class="stat-value accent" id="jellyEpisodes">â€”</div>
+              <div class="stat-value accent" id="jellyEpisodes"></div>
             </div>
             <div class="stat-card">
               <div class="stat-label">Songs</div>
-              <div class="stat-value orange" id="jellySongs">â€”</div>
+              <div class="stat-value orange" id="jellySongs"></div>
             </div>
           </div>
 
@@ -289,16 +289,16 @@
             <div class="card">
               <div class="card-header">
                 <div>
-                  <div class="card-title">â–¶ Now Playing</div>
+                  <div class="card-title"> Now Playing</div>
                   <div class="card-subtitle">Current active sessions</div>
                 </div>
                 <div style="display:flex;gap:0.5rem">
                   <button class="btn-secondary btn-sm" id="jellyRefreshNP">Refresh</button>
-                  <button class="btn-blue btn-sm" id="publishNowPlayingBtn">ðŸ“¤ Publish to Discord</button>
+                  <button class="btn-blue btn-sm" id="publishNowPlayingBtn"> Publish to Discord</button>
                 </div>
               </div>
               <div id="jellyNowPlaying">
-                <div class="empty-state"><div class="empty-icon">ðŸ“º</div>No active playback</div>
+                <div class="empty-state"><div class="empty-icon"></div>No active playback</div>
               </div>
               <div id="jellyNPMsg" class="msg"></div>
             </div>
@@ -306,7 +306,7 @@
             <div class="card">
               <div class="card-header">
                 <div>
-                  <div class="card-title">ðŸ“š Library Sections</div>
+                  <div class="card-title"> Library Sections</div>
                   <div class="card-subtitle">Jellyfin media libraries</div>
                 </div>
                 <button class="btn-secondary btn-sm" id="jellyRefreshLibs">Refresh</button>
@@ -314,7 +314,7 @@
               <div class="table-wrap">
                 <table class="data-table">
                   <thead><tr><th>Library</th><th>Type</th><th>Paths</th></tr></thead>
-                  <tbody id="jellyLibsBody"><tr><td colspan="3" class="empty-state">Loadingâ€¦</td></tr></tbody>
+                  <tbody id="jellyLibsBody"><tr><td colspan="3" class="empty-state">Loading</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -322,21 +322,21 @@
             <div class="card col-span-2">
               <div class="card-header">
                 <div>
-                  <div class="card-title">ðŸ“Š Stats Snapshot</div>
+                  <div class="card-title"> Stats Snapshot</div>
                   <div class="card-subtitle">Library totals and activity summary</div>
                 </div>
-                <button class="btn-purple btn-sm" id="publishJellyStatsBtn">ðŸ“¤ Publish to Discord</button>
+                <button class="btn-purple btn-sm" id="publishJellyStatsBtn"> Publish to Discord</button>
               </div>
               <div class="grid-4" id="jellyStatsGrid">
-                <div class="stat-card"><div class="stat-label">Played Items</div><div class="stat-value green" id="jellyPlayed">â€”</div></div>
-                <div class="stat-card"><div class="stat-label">Active Streams</div><div class="stat-value accent" id="jellyActive">â€”</div></div>
+                <div class="stat-card"><div class="stat-label">Played Items</div><div class="stat-value green" id="jellyPlayed"></div></div>
+                <div class="stat-card"><div class="stat-label">Active Streams</div><div class="stat-value accent" id="jellyActive"></div></div>
               </div>
               <div id="jellyStatsMsg" class="msg"></div>
             </div>
           </div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: Reports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: Reports  -->
         <div id="tabReports" class="tab-pane">
           <p class="pane-title">Reports</p>
           <p class="pane-sub">Issues raised in Overseerr, posted automatically to your reports channel.</p>
@@ -344,7 +344,7 @@
           <div class="card">
             <div class="card-header">
               <div>
-                <div class="card-title">ðŸš¨ Overseerr Issues</div>
+                <div class="card-title"> Overseerr Issues</div>
                 <div class="card-subtitle">Latest reported problems from your users</div>
               </div>
               <button class="btn-secondary btn-sm" id="reportsRefreshBtn">Refresh</button>
@@ -363,7 +363,7 @@
                   </tr>
                 </thead>
                 <tbody id="reportsTableBody">
-                  <tr><td colspan="7" class="empty-state">Loadingâ€¦</td></tr>
+                  <tr><td colspan="7" class="empty-state">Loading</td></tr>
                 </tbody>
               </table>
             </div>
@@ -372,13 +372,13 @@
           <div class="card gap-top">
             <div class="card-header">
               <div>
-                <div class="card-title">ðŸ’¬ Post a Comment</div>
+                <div class="card-title"> Post a Comment</div>
                 <div class="card-subtitle">Reply to an issue directly from the dashboard</div>
               </div>
             </div>
             <div class="settings-grid">
               <label>Issue ID <input type="number" id="respondIssueId" placeholder="e.g. 42" min="1" /></label>
-              <label>Message <input type="text" id="respondMessage" placeholder="Your replyâ€¦" /></label>
+              <label>Message <input type="text" id="respondMessage" placeholder="Your reply" /></label>
             </div>
             <div class="btn-row">
               <button class="btn-primary" id="respondSubmitBtn">Post Comment</button>
@@ -387,14 +387,14 @@
           </div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: Bot Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: Bot Config  -->
         <div id="tabBotConfig" class="tab-pane">
           <p class="pane-title">Bot Configuration</p>
           <p class="pane-sub">Control automation flags, announcement behaviour, daily news, and message templates.</p>
 
           <form id="botConfigForm">
             <div class="settings-section">
-              <div class="settings-title">âš¡ Automation</div>
+              <div class="settings-title"> Automation</div>
               <div class="check-group grid-2">
                 <label class="check-item">
                   <input type="checkbox" name="announceOnRequestCreated" />
@@ -456,20 +456,20 @@
             </div>
 
             <div class="settings-section">
-              <div class="settings-title">ðŸ“° Daily News Scheduler</div>
+              <div class="settings-title"> Daily News Scheduler</div>
               <div class="settings-grid">
-                <label>Send Hour (0â€“23, server local time)
+                <label>Send Hour (023, server local time)
                   <input name="dailyNewsHourLocal" type="number" min="0" max="23" placeholder="9" />
                 </label>
               </div>
               <div class="btn-row">
-                <button type="button" class="btn-secondary" id="sendDailyNewsBtn">ðŸ“° Send Daily News Now</button>
+                <button type="button" class="btn-secondary" id="sendDailyNewsBtn"> Send Daily News Now</button>
               </div>
               <div id="dailyNewsMsg" class="msg"></div>
             </div>
 
             <div class="settings-section">
-              <div class="settings-title">ðŸ“ Announcement Templates</div>
+              <div class="settings-title"> Announcement Templates</div>
               <p class="text-sm muted" style="margin-bottom:0.8rem">
                 Available variables: <code>{{event}}</code> <code>{{subject}}</code> <code>{{media_type}}</code>
                 <code>{{request_id}}</code> <code>{{media_status}}</code> <code>{{requestedBy_username}}</code>
@@ -495,14 +495,14 @@
           <div id="botConfigMsg" class="msg"></div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: Channels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: Channels  -->
         <div id="tabChannels" class="tab-pane">
           <p class="pane-title">Channel &amp; Role Mapping</p>
-          <p class="pane-sub">Map Discord channel and role IDs to each bot feature. Right-click a channel in Discord â†’ Copy ID.</p>
+          <p class="pane-sub">Map Discord channel and role IDs to each bot feature. Right-click a channel in Discord  Copy ID.</p>
 
           <form id="channelsForm">
             <div class="settings-section">
-              <div class="settings-title">ðŸ“¢ Announcement Channels</div>
+              <div class="settings-title"> Announcement Channels</div>
               <div class="settings-grid">
                 <label>Requests Channel
                   <input name="requestsChannelId" type="text" placeholder="123456789012345678" />
@@ -523,7 +523,7 @@
             </div>
 
             <div class="settings-section">
-              <div class="settings-title">ðŸŽ¬ Jellyfin Channels</div>
+              <div class="settings-title"> Jellyfin Channels</div>
               <div class="settings-grid">
                 <label>Now Playing Channel
                   <input name="jellyfinNowPlayingChannelId" type="text" placeholder="123456789012345678" />
@@ -544,7 +544,7 @@
             </div>
 
             <div class="settings-section">
-              <div class="settings-title">ðŸ‘¥ Community Channels</div>
+              <div class="settings-title"> Community Channels</div>
               <div class="settings-grid">
                 <label>General Channel
                   <input name="generalChannelId" type="text" placeholder="123456789012345678" />
@@ -565,7 +565,7 @@
             </div>
 
             <div class="settings-section">
-              <div class="settings-title">ðŸŽ­ Roles</div>
+              <div class="settings-title"> Roles</div>
               <div class="settings-grid">
                 <label>Request Ping Role
                   <input name="requestRoleId" type="text" placeholder="123456789012345678" />
@@ -586,7 +586,7 @@
           <div id="channelsMsg" class="msg"></div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: Environment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: Environment  -->
         <div id="tabEnvironment" class="tab-pane">
           <p class="pane-title">Environment Settings</p>
           <p class="pane-sub">Edit API credentials and runtime settings. These are persisted to the .env file.</p>
@@ -599,7 +599,7 @@
           <div id="envMsg" class="msg"></div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: Logs  -->
         <div id="tabLogs" class="tab-pane">
           <p class="pane-title">Logs</p>
           <p class="pane-sub">Live bot and server logs. Tail, filter, and download log output.</p>
@@ -633,12 +633,12 @@
               </div>
             </div>
 
-            <pre id="logsBox" class="console-box" style="height:340px;overflow:auto">Loading…</pre>
+            <pre id="logsBox" class="console-box" style="height:340px;overflow:auto">Loading</pre>
             <div id="logsMsg" class="msg"></div>
           </div>
         </div>
 
-        <!-- â”€â”€â”€ TAB: System â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!--  TAB: System  -->
         <div id="tabSystem" class="tab-pane">
           <p class="pane-title">System</p>
           <p class="pane-sub">Service health, systemd deployment, and account management.</p>
@@ -647,18 +647,18 @@
             <div class="card">
               <div class="card-header">
                 <div>
-                  <div class="card-title">ðŸ©º Service Health</div>
+                  <div class="card-title"> Service Health</div>
                   <div class="card-subtitle">Live status of all integrated services</div>
                 </div>
                 <button class="btn-secondary btn-sm" id="healthRefreshBtn">Refresh</button>
               </div>
-              <pre id="healthBox" class="console-box">Loadingâ€¦</pre>
+              <pre id="healthBox" class="console-box">Loading</pre>
             </div>
 
             <div class="card">
               <div class="card-header">
                 <div>
-                  <div class="card-title">ðŸ”‘ Change Password</div>
+                  <div class="card-title"> Change Password</div>
                   <div class="card-subtitle">Update your admin account password</div>
                 </div>
               </div>
@@ -673,7 +673,7 @@
             <div class="card col-span-2">
               <div class="card-header">
                 <div>
-                  <div class="card-title">ðŸ§ Systemd Deploy Helper</div>
+                  <div class="card-title"> Systemd Deploy Helper</div>
                   <div class="card-subtitle">Generate a Linux systemd unit file and deploy commands</div>
                 </div>
               </div>

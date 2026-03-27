@@ -1,8 +1,8 @@
 /* ============================================================
-   ApexFlix — Media Server Dashboard  ·  app.js
+   ApexFlix  Media Server Dashboard    app.js
    ============================================================ */
 
-/* ─────────────────────────────────────── helpers ─────── */
+/*  helpers  */
 async function fetchJson(url, options) {
   const response = await fetch(url, options);
   const data = await response.json().catch(() => ({}));
@@ -34,12 +34,12 @@ function clearMsg(id) {
 }
 
 function fmtDate(isoString) {
-  if (!isoString) return "—";
+  if (!isoString) return "";
   const d = new Date(isoString);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-/* ─────────────────────────────── status badge helpers ─── */
+/*  status badge helpers  */
 const STATUS_LABELS = {
   1: ["badge-muted", "Unknown"],
   2: ["badge-blue", "Pending"],
@@ -70,7 +70,7 @@ function issueStatusBadge(code) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
-/* ─────────────────────────────── env form renderer ───── */
+/*  env form renderer  */
 function renderEnvForm(targetId, allowedKeys, values) {
   const form = document.getElementById(targetId);
   if (!form) return;
@@ -130,7 +130,7 @@ function renderEnvForm(targetId, allowedKeys, values) {
     .join("");
 }
 
-/* ─────────────────────────────── tab router ──────────── */
+/*  tab router  */
 const TAB_TITLES = {
   tabDashboard: "Dashboard",
   tabRequests: "Requests",
@@ -204,7 +204,7 @@ function onTabActivated(id) {
   }
 }
 
-/* ─────────────────────────────── status pills ────────── */
+/*  status pills  */
 async function updateStatusPills() {
   const pill = (id, online) => {
     const el = document.getElementById(id);
@@ -212,7 +212,7 @@ async function updateStatusPills() {
     el.className = `status-pill ${online ? "online" : "offline"}`;
   };
 
-  // Bot — server is responding = online
+  // Bot  server is responding = online
   pill("pillBot", true);
 
   try {
@@ -230,7 +230,7 @@ async function updateStatusPills() {
   }
 }
 
-/* ─────────────────────────────── dashboard ───────────── */
+/*  dashboard  */
 async function refreshDashboard() {
   loadDashboardStats();
   loadDashboardNowPlaying();
@@ -241,20 +241,20 @@ async function refreshDashboard() {
 async function loadDashboardStats() {
   try {
     const data = await fetchJson("api/jellyfin/stats");
-    document.getElementById("statMovies").textContent = data.movieCount ?? "—";
-    document.getElementById("statSeries").textContent = data.seriesCount ?? "—";
-    document.getElementById("statEpisodes").textContent = data.episodeCount ?? "—";
-    document.getElementById("statStreams").textContent = data.activeSessions ?? "—";
+    document.getElementById("statMovies").textContent = data.movieCount ?? "";
+    document.getElementById("statSeries").textContent = data.seriesCount ?? "";
+    document.getElementById("statEpisodes").textContent = data.episodeCount ?? "";
+    document.getElementById("statStreams").textContent = data.activeSessions ?? "";
   } catch {
     ["statMovies", "statSeries", "statEpisodes", "statStreams"].forEach(
-      (id) => (document.getElementById(id).textContent = "—")
+      (id) => (document.getElementById(id).textContent = "")
     );
   }
 }
 
 function renderNowPlayingHtml(nowPlaying) {
   if (!nowPlaying?.length) {
-    return `<div class="empty-state"><div class="empty-icon">📺</div>No active playback</div>`;
+    return `<div class="empty-state"><div class="empty-icon"></div>No active playback</div>`;
   }
   return nowPlaying
     .map((s) => {
@@ -300,9 +300,9 @@ async function loadDashboardLatest() {
     tbody.innerHTML = data.items
       .map(
         (item) => `<tr>
-          <td>${escapeHtml(item.name || "—")}</td>
-          <td><span class="badge badge-blue">${escapeHtml(item.type || "—")}</span></td>
-          <td>${escapeHtml(String(item.productionYear || "—"))}</td>
+          <td>${escapeHtml(item.name || "")}</td>
+          <td><span class="badge badge-blue">${escapeHtml(item.type || "")}</span></td>
+          <td>${escapeHtml(String(item.productionYear || ""))}</td>
         </tr>`
       )
       .join("");
@@ -327,8 +327,8 @@ async function loadDashboardRequests() {
       .map(
         (r) => `<tr>
           <td class="mono">#${r.request_id}</td>
-          <td>${escapeHtml(r.title || "—")}</td>
-          <td><span class="badge badge-purple">${escapeHtml(r.media_type || "—")}</span></td>
+          <td>${escapeHtml(r.title || "")}</td>
+          <td><span class="badge badge-purple">${escapeHtml(r.media_type || "")}</span></td>
           <td>${statusBadge(r.status_code)}</td>
           <td class="muted-text">${fmtDate(r.updated_at)}</td>
         </tr>`
@@ -339,7 +339,7 @@ async function loadDashboardRequests() {
   }
 }
 
-/* ─────────────────────────────── requests tab ────────── */
+/*  requests tab  */
 async function loadRequestsTable() {
   const tbody = document.getElementById("reqTableBody");
   if (!tbody) return;
@@ -354,8 +354,8 @@ async function loadRequestsTable() {
       .map(
         (r) => `<tr>
           <td class="mono">#${r.request_id}</td>
-          <td>${escapeHtml(r.title || "—")}</td>
-          <td><span class="badge badge-purple">${escapeHtml(r.media_type || "—")}</span></td>
+          <td>${escapeHtml(r.title || "")}</td>
+          <td><span class="badge badge-purple">${escapeHtml(r.media_type || "")}</span></td>
           <td>${statusBadge(r.status_code)}</td>
         </tr>`
       )
@@ -398,7 +398,7 @@ function wireRequestForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      setMsg("requestMsg", `Submitted "${data.title || "request"}" — ${data.statusText || "pending"}`, "ok");
+      setMsg("requestMsg", `Submitted "${data.title || "request"}"  ${data.statusText || "pending"}`, "ok");
       form.reset();
       loadRequestsTable();
     } catch (err) {
@@ -407,21 +407,21 @@ function wireRequestForm() {
   });
 }
 
-/* ─────────────────────────────── jellyfin tab ────────── */
+/*  jellyfin tab  */
 async function loadJellyfinStats() {
   try {
     const data = await fetchJson("api/jellyfin/stats");
-    document.getElementById("jellyMovies").textContent = data.movieCount ?? "—";
-    document.getElementById("jellySeries").textContent = data.seriesCount ?? "—";
-    document.getElementById("jellyEpisodes").textContent = data.episodeCount ?? "—";
-    document.getElementById("jellySongs").textContent = data.songCount ?? "—";
-    document.getElementById("jellyPlayed").textContent = data.playedItemsCount ?? "—";
-    document.getElementById("jellyActive").textContent = data.activeSessions ?? "—";
+    document.getElementById("jellyMovies").textContent = data.movieCount ?? "";
+    document.getElementById("jellySeries").textContent = data.seriesCount ?? "";
+    document.getElementById("jellyEpisodes").textContent = data.episodeCount ?? "";
+    document.getElementById("jellySongs").textContent = data.songCount ?? "";
+    document.getElementById("jellyPlayed").textContent = data.playedItemsCount ?? "";
+    document.getElementById("jellyActive").textContent = data.activeSessions ?? "";
   } catch {
     ["jellyMovies", "jellySeries", "jellyEpisodes", "jellySongs", "jellyPlayed", "jellyActive"].forEach(
       (id) => {
         const el = document.getElementById(id);
-        if (el) el.textContent = "—";
+        if (el) el.textContent = "";
       }
     );
   }
@@ -462,7 +462,7 @@ async function loadJellyfinLibraries() {
   }
 }
 
-/* ─────────────────────────────── reports tab ─────────── */
+/*  reports tab  */
 async function loadReports() {
   const tbody = document.getElementById("reportsTableBody");
   const badge = document.getElementById("badgeReports");
@@ -479,7 +479,7 @@ async function loadReports() {
       .map(
         (i) => `<tr>
           <td class="mono">#${i.id}</td>
-          <td>${escapeHtml(i.subject || "—")}</td>
+          <td>${escapeHtml(i.subject || "")}</td>
           <td>${issueTypeBadge(i.issueType)}</td>
           <td>${issueStatusBadge(i.status)}</td>
           <td class="muted-text">${i.commentCount ?? 0}</td>
@@ -499,7 +499,7 @@ function quickFillIssue(id) {
   document.getElementById("respondMessage")?.focus();
 }
 
-/* ─────────────────────────────── bot config ──────────── */
+/*  bot config  */
 const BOT_BOOL_FIELDS = [
   "enforceRequestChannel",
   "announceOnRequestCreated",
@@ -639,7 +639,7 @@ async function saveChannels() {
   }
 }
 
-/* ─────────────────────────────── environment ─────────── */
+/*  environment  */
 async function loadEnvSettings() {
   try {
     const data = await fetchJson("api/admin/env");
@@ -668,7 +668,7 @@ async function saveEnvSettings() {
   }
 }
 
-/* ─────────────────────────────── system ──────────────── */
+/*  system  */
 async function loadHealth() {
   const box = document.getElementById("healthBox");
   if (!box) return;
@@ -708,7 +708,7 @@ async function generateSystemdUnit() {
   }
 }
 
-/* ─────────────────────────────── logs utilities ───────── */
+/*  logs utilities  */
 function formatLogEntry(entry) {
   if (!entry) return "";
   if (entry.raw) return String(entry.raw);
@@ -730,7 +730,7 @@ async function loadLogs() {
   const level = document.getElementById("logsLevelFilter")?.value || "";
   const limit = Number(document.getElementById("logsLimit")?.value) || 200;
   const search = document.getElementById("logsSearch")?.value || "";
-  setMsg("logsMsg", "Loading logs…", "info");
+  setMsg("logsMsg", "Loading logs", "info");
   try {
     const qs = new URLSearchParams();
     qs.set("limit", String(limit));
@@ -827,7 +827,7 @@ function downloadLogs() {
   window.location = "/api/admin/logs/download";
 }
 
-/* ─────────────────────────────── wire all ────────────── */
+/*  wire all  */
 function wireAll(user) {
   const userEl = document.getElementById("sidebarUser");
   if (userEl) userEl.textContent = user.username;
@@ -847,7 +847,7 @@ function wireAll(user) {
   document.getElementById("dashRefreshLatest")?.addEventListener("click", loadDashboardLatest);
   document.getElementById("dashRefreshRequests")?.addEventListener("click", loadDashboardRequests);
   document.getElementById("dashBackfillBtn")?.addEventListener("click", async () => {
-    setMsg("dashBackfillMsg", "Running backfill…", "info");
+    setMsg("dashBackfillMsg", "Running backfill", "info");
     try {
       const data = await fetchJson("api/admin/requests/backfill", { method: "POST" });
       setMsg("dashBackfillMsg", data.message || "Backfill complete.", "ok");
@@ -863,14 +863,14 @@ function wireAll(user) {
   document.getElementById("jellyRefreshNP")?.addEventListener("click", loadJellyfinNowPlaying);
   document.getElementById("jellyRefreshLibs")?.addEventListener("click", loadJellyfinLibraries);
   document.getElementById("publishNowPlayingBtn")?.addEventListener("click", async () => {
-    setMsg("jellyNPMsg", "Publishing to Discord…", "info");
+    setMsg("jellyNPMsg", "Publishing to Discord", "info");
     try {
       const data = await fetchJson("api/admin/jellyfin/publish-now-playing", { method: "POST" });
       setMsg("jellyNPMsg", data.message || "Now playing snapshot sent.", "ok");
     } catch (err) { setMsg("jellyNPMsg", err.message, "err"); }
   });
   document.getElementById("publishJellyStatsBtn")?.addEventListener("click", async () => {
-    setMsg("jellyStatsMsg", "Publishing to Discord…", "info");
+    setMsg("jellyStatsMsg", "Publishing to Discord", "info");
     try {
       const data = await fetchJson("api/admin/jellyfin/publish-stats", { method: "POST" });
       setMsg("jellyStatsMsg", data.message || "Jellyfin stats snapshot sent.", "ok");
@@ -903,7 +903,7 @@ function wireAll(user) {
   // Bot Config
   document.getElementById("saveBotConfigBtn")?.addEventListener("click", saveBotConfig);
   document.getElementById("sendDailyNewsBtn")?.addEventListener("click", async () => {
-    setMsg("dailyNewsMsg", "Sending…", "info");
+    setMsg("dailyNewsMsg", "Sending", "info");
     try {
       const data = await fetchJson("api/admin/news/send", { method: "POST" });
       setMsg("dailyNewsMsg", data.message || "Daily news sent.", "ok");
@@ -956,7 +956,7 @@ function wireAll(user) {
   setInterval(refreshDashboard, 60000);
 }
 
-/* ─────────────────────────────── auth screens ────────── */
+/*  auth screens  */
 function wireSetupForm() {
   document.getElementById("setupForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1016,7 +1016,7 @@ function showApp(user) {
   wireAll(user);
 }
 
-/* ─────────────────────────────── init ────────────────── */
+/*  init  */
 async function init() {
   wireSetupForm();
   wireLoginForm();

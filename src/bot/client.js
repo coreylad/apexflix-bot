@@ -31,6 +31,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     announceOnAnyStatus: false,
     dailyNewsEnabled: true,
     dailyNewsHourLocal: "9",
+    dailyNewsLastSentDate: "",
     dmOnStatusChange: true,
     mentionRequesterInChannel: true,
     useRichEmbeds: true,
@@ -81,6 +82,10 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
   function getBotConfig() {
     const stored = db.getBotConfig();
+
+    const lastSentRaw = String(stored.dailyNewsLastSentDate || DEFAULT_BOT_CONFIG.dailyNewsLastSentDate);
+    const lastSentDate = /^\d{4}-\d{2}-\d{2}$/.test(lastSentRaw) ? lastSentRaw : "";
+
     return {
       requestsChannelId: normalizeId(stored.requestsChannelId || DEFAULT_BOT_CONFIG.requestsChannelId),
       uploadsChannelId: normalizeId(stored.uploadsChannelId || DEFAULT_BOT_CONFIG.uploadsChannelId),
@@ -94,6 +99,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       announceOnAnyStatus: asBoolean(stored.announceOnAnyStatus, DEFAULT_BOT_CONFIG.announceOnAnyStatus),
       dailyNewsEnabled: asBoolean(stored.dailyNewsEnabled, DEFAULT_BOT_CONFIG.dailyNewsEnabled),
       dailyNewsHourLocal: String(stored.dailyNewsHourLocal || DEFAULT_BOT_CONFIG.dailyNewsHourLocal),
+      dailyNewsLastSentDate: lastSentDate,
       dmOnStatusChange: asBoolean(stored.dmOnStatusChange, DEFAULT_BOT_CONFIG.dmOnStatusChange),
       mentionRequesterInChannel: asBoolean(stored.mentionRequesterInChannel, DEFAULT_BOT_CONFIG.mentionRequesterInChannel),
       useRichEmbeds: asBoolean(stored.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds),
@@ -793,6 +799,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     const result = await sendDailyNewsReport({ forced: false });
     if (result.ok) {
       lastDailyNewsDate = today;
+      db.saveBotConfig({ dailyNewsLastSentDate: today });
       logger.info(`Daily news report sent to channel ${result.channelId}`);
     }
   }
@@ -800,6 +807,11 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
   function startDailyNewsScheduler() {
     if (dailyNewsTimer) {
       return;
+    }
+
+    const cfg = getBotConfig();
+    if (cfg.dailyNewsLastSentDate) {
+      lastDailyNewsDate = cfg.dailyNewsLastSentDate;
     }
 
     runDailyNewsTick().catch((error) => {
@@ -1283,6 +1295,112 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     await interaction.reply(toEphemeralResponse(`Jellyfin library sections:\n${lines}`));
   }
 
+  async function publishJellyfinNowPlayingSnapshot({ forced = false } = {}) {
+    if (!online) {
+      return { ok: false, message: "Discord bot is not online." };
+    }
+
+    const cfg = getBotConfig();
+    if (!cfg.jellyfinNowPlayingChannelId) {
+      return { ok: false, message: "Jellyfin Now Playing channel is not configured." };
+    }
+
+    const result = await jellyfin.getNowPlaying(8);
+    const lines =
+      result.nowPlaying.length > 0
+        ? result.nowPlaying
+            .map((item) => {
+              const percent = Number.isInteger(item.playbackPercent) ? `${item.playbackPercent}%` : "n/a";
+              const pause = item.paused ? "paused" : "playing";
+              return `• ${item.name} (${item.type}, ${percent}, ${pause}, ${item.playMethod})`;
+            })
+            .join("\n")
+        : "No active playback right now.";
+
+    const payload = buildAnnouncementPayload({
+      title: "Jellyfin Now Playing",
+      description: forced ? "Manual snapshot" : "Automated snapshot",
+      color: 0x4cc9f0,
+      fields: [
+        {
+          name: "Playback",
+          value: lines.slice(0, 1024),
+          inline: false
+        },
+        {
+          name: "Active Sessions",
+          value: String(result.activeSessions),
+          inline: true
+        }
+      ]
+    });
+
+    await sendToChannel(cfg.jellyfinNowPlayingChannelId, payload);
+    return {
+      ok: true,
+      channelId: cfg.jellyfinNowPlayingChannelId,
+      activeSessions: result.activeSessions,
+      itemCount: result.nowPlaying.length
+    };
+  }
+
+  async function publishJellyfinStatsSnapshot({ forced = false } = {}) {
+    if (!online) {
+      return { ok: false, message: "Discord bot is not online." };
+    }
+
+    const cfg = getBotConfig();
+    if (!cfg.jellyfinStatsChannelId) {
+      return { ok: false, message: "Jellyfin Stats channel is not configured." };
+    }
+
+    const [usage, sections] = await Promise.all([
+      jellyfin.getUsageStats(),
+      jellyfin.getLibrarySections()
+    ]);
+
+    const sectionsText =
+      sections.length > 0
+        ? sections
+            .slice(0, 8)
+            .map((section) => `• ${section.name} (${section.collectionType}, paths: ${section.pathCount})`)
+            .join("\n")
+        : "No library sections returned.";
+
+    const payload = buildAnnouncementPayload({
+      title: "Jellyfin Stats Snapshot",
+      description: forced ? "Manual snapshot" : "Automated snapshot",
+      color: 0x2ecc71,
+      fields: [
+        {
+          name: "Library Totals",
+          value: [
+            `Movies: ${usage.movieCount}`,
+            `Series: ${usage.seriesCount}`,
+            `Episodes: ${usage.episodeCount}`,
+            `Songs: ${usage.songCount}`,
+            `Played Items: ${usage.playedItemsCount}`,
+            `Active Sessions: ${usage.activeSessions}`
+          ].join("\n"),
+          inline: false
+        },
+        {
+          name: "Sections",
+          value: sectionsText.slice(0, 1024),
+          inline: false
+        }
+      ]
+    });
+
+    await sendToChannel(cfg.jellyfinStatsChannelId, payload);
+    return {
+      ok: true,
+      channelId: cfg.jellyfinStatsChannelId,
+      usage,
+      sectionCount: sections.length
+    };
+  }
+
   async function notifyDiscordUser(discordUserId, message) {
     // DM notifications are intentionally disabled; updates are server-channel only.
     return;
@@ -1394,6 +1512,8 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     notifyDiscordUser,
     announceRequestStatusChange,
     sendDailyNewsReport,
+    publishJellyfinNowPlayingSnapshot,
+    publishJellyfinStatsSnapshot,
     getClient: () => client
   };
 }

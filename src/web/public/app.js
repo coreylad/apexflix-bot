@@ -222,6 +222,8 @@ async function loadBotConfig() {
     "updatesChannelId",
     "newsChannelId",
     "reportsChannelId",
+    "jellyfinNowPlayingChannelId",
+    "jellyfinStatsChannelId",
     "requestRoleId",
     "dailyNewsHourLocal",
     "requestAnnouncementTemplate",
@@ -265,6 +267,8 @@ async function saveBotConfig() {
     "updatesChannelId",
     "newsChannelId",
     "reportsChannelId",
+    "jellyfinNowPlayingChannelId",
+    "jellyfinStatsChannelId",
     "requestRoleId",
     "dailyNewsHourLocal",
     "requestAnnouncementTemplate",
@@ -351,6 +355,22 @@ async function generateSystemdUnit() {
   unitBox.textContent = response.unit || "";
 }
 
+async function publishNowPlayingSnapshot() {
+  const response = await fetchJson("api/admin/jellyfin/publish-now-playing", {
+    method: "POST"
+  });
+
+  setMessage("jellyfinPublishResult", response.message || "Now playing snapshot sent.");
+}
+
+async function publishJellyfinStatsSnapshot() {
+  const response = await fetchJson("api/admin/jellyfin/publish-stats", {
+    method: "POST"
+  });
+
+  setMessage("jellyfinPublishResult", response.message || "Jellyfin stats snapshot sent.");
+}
+
 async function checkSession() {
   try {
     const me = await fetchJson("api/auth/me");
@@ -384,6 +404,8 @@ function wireAuth() {
   const saveEnvBtn = document.getElementById("saveEnvBtn");
   const saveBotConfigBtn = document.getElementById("saveBotConfigBtn");
   const sendDailyNewsBtn = document.getElementById("sendDailyNewsBtn");
+  const publishNowPlayingBtn = document.getElementById("publishNowPlayingBtn");
+  const publishJellyStatsBtn = document.getElementById("publishJellyStatsBtn");
   const generateSystemdBtn = document.getElementById("generateSystemdBtn");
   const backfillRequestsBtn = document.getElementById("backfillRequestsBtn");
   const passwordForm = document.getElementById("passwordForm");
@@ -483,6 +505,22 @@ function wireAuth() {
       await sendDailyNewsNow();
     } catch (error) {
       setMessage("dailyNewsResult", error.message, true);
+    }
+  });
+
+  publishNowPlayingBtn.addEventListener("click", async () => {
+    try {
+      await publishNowPlayingSnapshot();
+    } catch (error) {
+      setMessage("jellyfinPublishResult", error.message, true);
+    }
+  });
+
+  publishJellyStatsBtn.addEventListener("click", async () => {
+    try {
+      await publishJellyfinStatsSnapshot();
+    } catch (error) {
+      setMessage("jellyfinPublishResult", error.message, true);
     }
   });
 

@@ -9,6 +9,8 @@ const DEFAULT_BOT_CONFIG = {
   updatesChannelId: "",
   newsChannelId: "",
   reportsChannelId: "",
+  jellyfinNowPlayingChannelId: "",
+  jellyfinStatsChannelId: "",
   requestRoleId: "",
   enforceRequestChannel: "false",
   announceOnRequestCreated: "true",
@@ -57,6 +59,8 @@ function normalizeBotConfig(input) {
     updatesChannelId: normalizeId(source.updatesChannelId),
     newsChannelId: normalizeId(source.newsChannelId),
     reportsChannelId: normalizeId(source.reportsChannelId),
+    jellyfinNowPlayingChannelId: normalizeId(source.jellyfinNowPlayingChannelId),
+    jellyfinStatsChannelId: normalizeId(source.jellyfinStatsChannelId),
     requestRoleId: normalizeId(source.requestRoleId),
     enforceRequestChannel: asBoolString(source.enforceRequestChannel, DEFAULT_BOT_CONFIG.enforceRequestChannel),
     announceOnRequestCreated: asBoolString(source.announceOnRequestCreated, DEFAULT_BOT_CONFIG.announceOnRequestCreated),
@@ -352,6 +356,48 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot }) {
           availableCount: result.availableCount,
           usage: result.usage
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/jellyfin/publish-now-playing", authMiddleware, async (req, res, next) => {
+    try {
+      if (!bot || typeof bot.publishJellyfinNowPlayingSnapshot !== "function") {
+        return res.status(503).json({ error: "Discord bot is not ready for Jellyfin publish actions." });
+      }
+
+      const result = await bot.publishJellyfinNowPlayingSnapshot({ forced: true });
+      if (!result?.ok) {
+        return res.status(400).json({ error: result?.message || "Now playing publish failed." });
+      }
+
+      return res.json({
+        ok: true,
+        message: `Now playing snapshot sent to channel ${result.channelId}.`,
+        details: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/jellyfin/publish-stats", authMiddleware, async (req, res, next) => {
+    try {
+      if (!bot || typeof bot.publishJellyfinStatsSnapshot !== "function") {
+        return res.status(503).json({ error: "Discord bot is not ready for Jellyfin publish actions." });
+      }
+
+      const result = await bot.publishJellyfinStatsSnapshot({ forced: true });
+      if (!result?.ok) {
+        return res.status(400).json({ error: result?.message || "Jellyfin stats publish failed." });
+      }
+
+      return res.json({
+        ok: true,
+        message: `Jellyfin stats snapshot sent to channel ${result.channelId}.`,
+        details: result
       });
     } catch (error) {
       next(error);

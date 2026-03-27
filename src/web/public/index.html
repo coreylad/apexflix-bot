@@ -157,6 +157,14 @@
                   <input name="reportsChannelId" type="text" placeholder="123456789012345678" />
                 </label>
                 <label>
+                  Jellyfin Now Playing Channel ID
+                  <input name="jellyfinNowPlayingChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>
+                  Jellyfin Stats Channel ID
+                  <input name="jellyfinStatsChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>
                   Request Role ID (optional ping)
                   <input name="requestRoleId" type="text" placeholder="123456789012345678" />
                 </label>
@@ -242,6 +250,11 @@
           </div>
           <p id="botConfigResult"></p>
           <p id="dailyNewsResult"></p>
+          <p id="jellyfinPublishResult"></p>
+          <div class="admin-actions">
+            <button id="publishNowPlayingBtn" type="button">Publish Now Playing Snapshot</button>
+            <button id="publishJellyStatsBtn" type="button">Publish Jellyfin Stats Snapshot</button>
+          </div>
         </article>
 
         <article class="card env-card">

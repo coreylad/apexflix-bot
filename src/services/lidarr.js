@@ -298,6 +298,36 @@ function createLidarrClient(config) {
         rootFolderCount
       };
     },
+    getArtistById: async (artistId) => {
+      const id = asPositiveInteger(artistId, 0);
+      if (!id) {
+        return null;
+      }
+
+      try {
+        const client = getClient();
+        const response = await client.get(buildEndpoint(`api/v1/artist/${id}`));
+        const artist = response?.data;
+        if (!artist) {
+          return null;
+        }
+
+        return {
+          id: asPositiveInteger(artist.id, 0),
+          artistName: String(artist.artistName || artist.sortName || "Unknown artist").trim(),
+          monitored: Boolean(artist.monitored),
+          status: String(artist.status || "").trim(),
+          artistType: String(artist.artistType || "Artist").trim(),
+          albumCount: asPositiveInteger(artist.statistics?.albumCount || artist.albumCount, 0),
+          trackCount: asPositiveInteger(artist.statistics?.trackCount || artist.trackCount, 0),
+          genres: Array.isArray(artist.genres) ? artist.genres : [],
+          remotePoster: String(artist.remotePoster || "").trim(),
+          added: toIsoDate(artist.added)
+        };
+      } catch (error) {
+        return null;
+      }
+    },
     getRecentArtists: async (limit = 12) => {
       const max = Math.max(1, Math.min(50, Number(limit || 12)));
       const artists = await getArtists();

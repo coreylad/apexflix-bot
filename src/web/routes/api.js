@@ -918,10 +918,41 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
     }
   });
 
-  router.get("/requests/recent", (req, res) => {
-    const limit = Math.min(Number(req.query.limit) || 20, 100);
-    const rows = db.getRecentRequestEvents(limit);
-    res.json({ count: rows.length, rows });
+  router.get("/requests/recent", async (req, res, next) => {
+    try {
+      const limit = Math.min(Number(req.query.limit) || 20, 100);
+      const rows = db.getRecentRequestEvents(limit);
+
+      const enrichedRows = await Promise.all(
+        rows.map(async (row) => {
+          if (row.media_type === "music" && lidarr && typeof lidarr.getArtistById === "function") {
+            const artistId = Number(row.media_id || 0);
+            if (artistId > 0) {
+              try {
+                const artist = await lidarr.getArtistById(artistId);
+                if (artist) {
+                  return {
+                    ...row,
+                    lidarr_status: artist.status || "Unknown",
+                    lidarr_monitored: artist.monitored,
+                    lidarr_albumCount: artist.albumCount || 0,
+                    lidarr_trackCount: artist.trackCount || 0,
+                    title: artist.artistName || row.title
+                  };
+                }
+              } catch (error) {
+                return row;
+              }
+            }
+          }
+          return row;
+        })
+      );
+
+      res.json({ count: enrichedRows.length, rows: enrichedRows });
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.get("/jellyfin/latest", async (req, res, next) => {

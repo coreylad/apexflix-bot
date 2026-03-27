@@ -484,13 +484,20 @@ async function loadDashboardRequests() {
     }
     tbody.innerHTML = rows
       .map(
-        (r) => `<tr>
-          <td class="mono">#${r.request_id}</td>
-          <td>${escapeHtml(r.title || "")}</td>
-          <td><span class="badge badge-purple">${escapeHtml(r.media_type || "")}</span></td>
-          <td>${statusBadge(r.status ?? r.status_code)}</td>
-          <td class="muted-text">${fmtDate(r.updated_at)}</td>
-        </tr>`
+        (r) => {
+          let statusDisplay = statusBadge(r.status ?? r.status_code);
+          if (r.media_type === "music" && r.lidarr_status) {
+            const monitored = r.lidarr_monitored ? `<span class="text-sm muted-text">(monitored)</span>` : "";
+            statusDisplay = `<span class="badge badge-orange">${escapeHtml(r.lidarr_status)}</span> ${monitored}`;
+          }
+          return `<tr>
+            <td class="mono">#${r.request_id}</td>
+            <td>${escapeHtml(r.title || "")}</td>
+            <td><span class="badge badge-purple">${escapeHtml(r.media_type || "")}</span></td>
+            <td>${statusDisplay}</td>
+            <td class="muted-text">${fmtDate(r.updated_at)}</td>
+          </tr>`;
+        }
       )
       .join("");
   } catch {
@@ -511,12 +518,19 @@ async function loadRequestsTable() {
     }
     tbody.innerHTML = rows
       .map(
-        (r) => `<tr>
-          <td class="mono">#${r.request_id}</td>
-          <td>${escapeHtml(r.title || "")}</td>
-          <td><span class="badge badge-purple">${escapeHtml(r.media_type || "")}</span></td>
-          <td>${statusBadge(r.status ?? r.status_code)}</td>
-        </tr>`
+        (r) => {
+          let statusDisplay = statusBadge(r.status ?? r.status_code);
+          if (r.media_type === "music" && r.lidarr_status) {
+            const monitored = r.lidarr_monitored ? `<span class="text-sm muted-text">(monitored)</span>` : "";
+            statusDisplay = `<span class="badge badge-orange">${escapeHtml(r.lidarr_status)}</span> ${monitored}`;
+          }
+          return `<tr>
+            <td class="mono">#${r.request_id}</td>
+            <td>${escapeHtml(r.title || "")}</td>
+            <td><span class="badge badge-purple">${escapeHtml(r.media_type || "")}</span></td>
+            <td>${statusDisplay}</td>
+          </tr>`;
+        }
       )
       .join("");
   } catch {

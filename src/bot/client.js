@@ -29,6 +29,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     newMoviesChannelId: "",
     newShowsChannelId: "",
     newEpisodesChannelId: "",
+    newMusicChannelId: "",
     generalChannelId: "",
     welcomeChannelId: "",
     suggestionsChannelId: "",
@@ -109,6 +110,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
       newMoviesChannelId: normalizeId(stored.newMoviesChannelId || DEFAULT_BOT_CONFIG.newMoviesChannelId),
       newShowsChannelId: normalizeId(stored.newShowsChannelId || DEFAULT_BOT_CONFIG.newShowsChannelId),
       newEpisodesChannelId: normalizeId(stored.newEpisodesChannelId || DEFAULT_BOT_CONFIG.newEpisodesChannelId),
+      newMusicChannelId: normalizeId(stored.newMusicChannelId || DEFAULT_BOT_CONFIG.newMusicChannelId),
       generalChannelId: normalizeId(stored.generalChannelId || DEFAULT_BOT_CONFIG.generalChannelId),
       welcomeChannelId: normalizeId(stored.welcomeChannelId || DEFAULT_BOT_CONFIG.welcomeChannelId),
       suggestionsChannelId: normalizeId(stored.suggestionsChannelId || DEFAULT_BOT_CONFIG.suggestionsChannelId),
@@ -308,6 +310,48 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
       content: mention || undefined,
       embeds: [embed]
     };
+  }
+
+  async function announceLidarrArtistAdded({
+    title,
+    artistId,
+    genres,
+    status,
+    requestId,
+    requesterDiscordId,
+    requesterUsername,
+    image
+  }) {
+    const cfg = getBotConfig();
+    const targetChannelId = cfg.newMusicChannelId || cfg.uploadsChannelId;
+    if (!targetChannelId) {
+      return;
+    }
+
+    const genreList = Array.isArray(genres)
+      ? genres
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      : [];
+
+    const mention = cfg.mentionRequesterInChannel && requesterDiscordId ? `<@${requesterDiscordId}>` : "";
+    const payload = buildAnnouncementPayload({
+      title: "New Music Artist Added",
+      description: `${title || "Unknown artist"} is now tracked in Lidarr.`,
+      color: 0xe67e22,
+      mention,
+      imageUrl: resolvePosterUrl(image || ""),
+      fields: [
+        { name: "Type", value: "music", inline: true },
+        { name: "Artist ID", value: String(artistId || "unknown"), inline: true },
+        { name: "Status", value: String(status || "Added to Lidarr"), inline: true },
+        { name: "Request ID", value: String(requestId || "unknown"), inline: true },
+        { name: "Requested By", value: String(requesterUsername || "Unknown"), inline: true },
+        { name: "Genres", value: genreList.length ? genreList.slice(0, 6).join(", ") : "Unknown", inline: false }
+      ]
+    });
+
+    await sendToChannel(targetChannelId, payload);
   }
 
   async function announceRequestCreated({
@@ -521,6 +565,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
       newMovies: "newMoviesChannelId",
       newShows: "newShowsChannelId",
       newEpisodes: "newEpisodesChannelId",
+      newMusic: "newMusicChannelId",
       general: "generalChannelId",
       welcome: "welcomeChannelId",
       suggestions: "suggestionsChannelId",
@@ -1278,6 +1323,17 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         image: selected.remotePoster || ""
       });
 
+      await announceLidarrArtistAdded({
+        title,
+        artistId: localArtistId > 0 ? localArtistId : 0,
+        genres: created.genres || selected.genres || [],
+        status: created.status || "Added to Lidarr",
+        requestId,
+        requesterDiscordId: interaction.user.id,
+        requesterUsername: interaction.user.username,
+        image: created.remotePoster || selected.remotePoster || ""
+      });
+
       return;
     }
 
@@ -1943,6 +1999,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     },
     notifyDiscordUser,
     announceRequestStatusChange,
+    announceLidarrArtistAdded,
     sendManualChannelTest,
     sendDailyNewsReport,
     publishJellyfinNowPlayingSnapshot,

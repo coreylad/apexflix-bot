@@ -949,6 +949,7 @@ const CHANNEL_FIELDS = [
   "newMoviesChannelId",
   "newShowsChannelId",
   "newEpisodesChannelId",
+  "newMusicChannelId",
   "generalChannelId",
   "welcomeChannelId",
   "suggestionsChannelId",

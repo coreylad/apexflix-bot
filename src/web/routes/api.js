@@ -17,6 +17,7 @@ const DEFAULT_BOT_CONFIG = {
   newMoviesChannelId: "",
   newShowsChannelId: "",
   newEpisodesChannelId: "",
+  newMusicChannelId: "",
   generalChannelId: "",
   welcomeChannelId: "",
   suggestionsChannelId: "",
@@ -77,6 +78,7 @@ function normalizeBotConfig(input) {
     newMoviesChannelId: normalizeId(source.newMoviesChannelId),
     newShowsChannelId: normalizeId(source.newShowsChannelId),
     newEpisodesChannelId: normalizeId(source.newEpisodesChannelId),
+    newMusicChannelId: normalizeId(source.newMusicChannelId),
     generalChannelId: normalizeId(source.generalChannelId),
     welcomeChannelId: normalizeId(source.welcomeChannelId),
     suggestionsChannelId: normalizeId(source.suggestionsChannelId),
@@ -1189,6 +1191,19 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
         statusText: "Added to Lidarr",
         requestedBy: req.auth?.user?.id || null
       });
+
+      if (bot && typeof bot.announceLidarrArtistAdded === "function") {
+        await bot.announceLidarrArtistAdded({
+          title,
+          artistId: localArtistId > 0 ? localArtistId : 0,
+          genres: created.genres || artist.genres || [],
+          status: created.status || "Added to Lidarr",
+          requestId,
+          requesterDiscordId: "",
+          requesterUsername: req.auth?.user?.username || "Web Admin",
+          image: created.remotePoster || artist.remotePoster || ""
+        });
+      }
 
       return res.json({
         ok: true,

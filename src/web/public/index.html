@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ApexFlix Community Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Manrope:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+
+    <main class="layout">
+      <header class="hero card">
+        <p class="label">ApexFlix</p>
+        <h1>Community Media Control Center</h1>
+        <p>
+          One Node service powering Discord commands, Overseerr request workflows,
+          Jellyfin updates, and a browser dashboard.
+        </p>
+      </header>
+
+      <section id="loginPanel" class="card auth-card">
+        <h2>Private Login</h2>
+        <p class="muted">
+          Default credentials on first run: <strong>admin / admin12345</strong>. Change
+          the password after login.
+        </p>
+        <form id="loginForm">
+          <label>
+            Username
+            <input name="username" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Sign In</button>
+        </form>
+        <p id="loginResult"></p>
+      </section>
+
+      <section id="dashboardPanel" class="grid hidden">
+        <article class="card admin-bar">
+          <h2>Admin Session</h2>
+          <p class="muted"><span id="sessionUser"></span></p>
+          <div class="admin-actions">
+            <button id="logoutBtn" type="button">Logout</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>Service Health</h2>
+          <pre id="health">Loading...</pre>
+        </article>
+
+        <article class="card">
+          <h2>Recent Requests</h2>
+          <ul id="requests" class="list"></ul>
+        </article>
+
+        <article class="card">
+          <h2>Latest Jellyfin Items</h2>
+          <ul id="latest" class="list"></ul>
+        </article>
+
+        <article class="card request-form-card">
+          <h2>Quick Web Request</h2>
+          <form id="requestForm">
+            <label>
+              Media Type
+              <select name="mediaType" required>
+                <option value="movie">Movie</option>
+                <option value="tv">TV</option>
+              </select>
+            </label>
+
+            <label>
+              TMDB Media ID
+              <input type="number" name="mediaId" min="1" required />
+            </label>
+
+            <button type="submit">Submit Request</button>
+          </form>
+          <p id="requestResult"></p>
+        </article>
+
+        <article class="card env-card">
+          <h2>.env Editor</h2>
+          <p class="muted">Save app credentials and runtime settings directly from the browser.</p>
+          <form id="envForm"></form>
+          <div class="admin-actions">
+            <button id="saveEnvBtn" type="button">Save Environment</button>
+          </div>
+          <p id="envResult"></p>
+        </article>
+
+        <article class="card">
+          <h2>Change Admin Password</h2>
+          <form id="passwordForm">
+            <label>
+              Current Password
+              <input name="currentPassword" type="password" autocomplete="current-password" required />
+            </label>
+            <label>
+              New Password
+              <input name="newPassword" type="password" minlength="8" autocomplete="new-password" required />
+            </label>
+            <button type="submit">Update Password</button>
+          </form>
+          <p id="passwordResult"></p>
+        </article>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

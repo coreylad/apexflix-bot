@@ -298,7 +298,9 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     image
   }) {
     const cfg = getBotConfig();
-    const isAvailable = Number(status) === 4;
+    const numericStatus = Number(status);
+    const isCompletedText = String(statusText || "").toLowerCase().includes("completed");
+    const isAvailable = numericStatus === 4 || numericStatus === 8 || isCompletedText;
 
     const mention = cfg.mentionRequesterInChannel && requesterDiscordId ? `<@${requesterDiscordId}>` : "";
     const availableMention = "";
@@ -309,8 +311,8 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       mediaType
     });
     const templateContext = buildTemplateContext({
-      notificationType: status === 4 ? "MEDIA_AVAILABLE" : "MEDIA_STATUS_CHANGED",
-      event: status === 4 ? "Request Available" : "Request Status Changed",
+      notificationType: isAvailable ? "MEDIA_AVAILABLE" : "MEDIA_STATUS_CHANGED",
+      event: isAvailable ? "Request Available" : "Request Status Changed",
       subject: title,
       message: `${title} changed status to ${statusText}.`,
       image: posterUrl || image || "",
@@ -741,19 +743,16 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     const helpText = [
       "How to use /request",
       "",
-      "Movie:",
-      "/request media_type:movie media_id:603",
+      "Run /request to open the request form.",
       "",
-      "TV (season modes):",
-      "/request media_type:tv media_id:1399 season:1",
-      "/request media_type:tv media_id:1399 season:all",
-      "/request media_type:tv media_id:1399 season:latest",
-      "/request media_type:tv media_id:1399 season:season1",
-      "/request media_type:tv media_id:1399 season:season[1]",
+      "Form fields:",
+      "- Media Type: movie or tv",
+      "- TMDB ID or TMDB URL",
+      "- Season (TV only): 1, all, latest, season1, season[1]",
       "",
       "Notes:",
-      "- For TV, season is required.",
-      "- For movies, do not set season.",
+      "- For TV, season is required in the form.",
+      "- For movies, leave season empty.",
       "- Seasons are validated against Seerr metadata before requesting."
     ].join("\n");
 
@@ -1031,6 +1030,105 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     await interaction.reply(toEphemeralResponse(`Latest from Jellyfin:\n${lines}`));
   }
 
+  function formatJellyfinSearchResults(items) {
+    if (!items.length) {
+      return "No Jellyfin results found.";
+    }
+
+    return items
+      .slice(0, 8)
+      .map((item) => {
+        const year = item.productionYear ? `, ${item.productionYear}` : "";
+        const runtime = item.runTimeTicks > 0 ? `, ${jellyfin.ticksToDuration(item.runTimeTicks)}` : "";
+        const series = item.seriesName ? `, ${item.seriesName}` : "";
+        return `• ${item.name} (${item.type}${year}${runtime}${series})`;
+      })
+      .join("\n");
+  }
+
+  async function handleJellySearch(interaction) {
+    const query = interaction.options.getString("query", true);
+    const mediaType = interaction.options.getString("media_type") || "all";
+
+    const items = await jellyfin.searchItems({
+      query,
+      mediaType,
+      limit: 8
+    });
+
+    await interaction.reply(toEphemeralResponse(`Jellyfin search results:\n${formatJellyfinSearchResults(items)}`));
+  }
+
+  async function handleJellyStats(interaction) {
+    const [usage, sections] = await Promise.all([
+      jellyfin.getUsageStats(),
+      jellyfin.getLibrarySections()
+    ]);
+
+    const sectionSummary =
+      sections.length > 0
+        ? sections
+            .slice(0, 8)
+            .map((section) => `• ${section.name} (${section.collectionType}, paths: ${section.pathCount})`)
+            .join("\n")
+        : "No library sections returned.";
+
+    const lines = [
+      "Jellyfin stats:",
+      `• Movies: ${usage.movieCount}`,
+      `• Series: ${usage.seriesCount}`,
+      `• Episodes: ${usage.episodeCount}`,
+      `• Songs: ${usage.songCount}`,
+      `• Played items total: ${usage.playedItemsCount}`,
+      `• Active sessions: ${usage.activeSessions}`,
+      "",
+      "Library sections:",
+      sectionSummary
+    ];
+
+    await interaction.reply(toEphemeralResponse(lines.join("\n")));
+  }
+
+  async function handleNowPlaying(interaction) {
+    const limit = interaction.options.getInteger("limit") || 6;
+    const result = await jellyfin.getNowPlaying(limit);
+
+    if (result.nowPlaying.length === 0) {
+      await interaction.reply(
+        toEphemeralResponse(`No active playback right now. Active sessions: ${result.activeSessions}`)
+      );
+      return;
+    }
+
+    const lines = result.nowPlaying
+      .map((item) => {
+        const percent = Number.isInteger(item.playbackPercent) ? `${item.playbackPercent}%` : "n/a";
+        const pause = item.paused ? "paused" : "playing";
+        return `• ${item.name} (${item.type}, ${percent}, ${pause}, ${item.playMethod})`;
+      })
+      .join("\n");
+
+    await interaction.reply(
+      toEphemeralResponse(
+        `Now playing (${result.nowPlaying.length}/${result.activeSessions} sessions):\n${lines}`
+      )
+    );
+  }
+
+  async function handleLibraries(interaction) {
+    const sections = await jellyfin.getLibrarySections();
+    if (sections.length === 0) {
+      await interaction.reply(toEphemeralResponse("No Jellyfin library sections returned."));
+      return;
+    }
+
+    const lines = sections
+      .map((section) => `• ${section.name} (${section.collectionType}, paths: ${section.pathCount})`)
+      .join("\n");
+
+    await interaction.reply(toEphemeralResponse(`Jellyfin library sections:\n${lines}`));
+  }
+
   async function notifyDiscordUser(discordUserId, message) {
     // DM notifications are intentionally disabled; updates are server-channel only.
     return;
@@ -1087,6 +1185,18 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
           break;
         case "recent":
           await handleRecent(interaction);
+          break;
+        case "jellysearch":
+          await handleJellySearch(interaction);
+          break;
+        case "jellystats":
+          await handleJellyStats(interaction);
+          break;
+        case "nowplaying":
+          await handleNowPlaying(interaction);
+          break;
+        case "libraries":
+          await handleLibraries(interaction);
           break;
         case "requesthelp":
           await handleRequestHelp(interaction);

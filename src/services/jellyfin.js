@@ -120,6 +120,47 @@ function createJellyfinClient(config) {
     );
   }
 
+  function normalizeItem(item) {
+    return {
+      id: item?.Id,
+      name: item?.Name || "Unknown",
+      type: item?.Type || "Unknown",
+      productionYear: item?.ProductionYear || null,
+      runTimeTicks: Number(item?.RunTimeTicks || 0),
+      seriesName: item?.SeriesName || "",
+      indexNumber: Number(item?.IndexNumber || 0),
+      parentIndexNumber: Number(item?.ParentIndexNumber || 0)
+    };
+  }
+
+  function ticksToDuration(ticks) {
+    const totalSeconds = Math.max(0, Math.floor(Number(ticks || 0) / 10000000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+
+    return `${seconds}s`;
+  }
+
+  function computePlaybackPercent(positionTicks, runtimeTicks) {
+    const position = Number(positionTicks || 0);
+    const runtime = Number(runtimeTicks || 0);
+    if (!Number.isFinite(position) || !Number.isFinite(runtime) || runtime <= 0) {
+      return null;
+    }
+
+    const pct = Math.max(0, Math.min(100, (position / runtime) * 100));
+    return Math.round(pct);
+  }
+
   return {
     getLatestItems: async (limit = 12) => {
       const client = getClient();
@@ -203,7 +244,81 @@ function createJellyfinClient(config) {
       }
 
       return stats;
-    }
+    },
+    searchItems: async ({ query, mediaType = "all", limit = 8 }) => {
+      const client = getClient();
+      const userId = await resolveUserId(client);
+      const normalizedLimit = Math.max(1, Math.min(20, Number(limit || 8)));
+      const normalizedType = String(mediaType || "all").toLowerCase();
+      const includeTypeMap = {
+        all: "Movie,Series,Episode,Audio",
+        movie: "Movie",
+        series: "Series",
+        tv: "Series",
+        episode: "Episode",
+        audio: "Audio"
+      };
+
+      const response = await client.get(buildEndpoint(`Users/${userId}/Items`), {
+        params: {
+          SearchTerm: String(query || "").trim(),
+          Recursive: true,
+          Limit: normalizedLimit,
+          IncludeItemTypes: includeTypeMap[normalizedType] || includeTypeMap.all,
+          Fields: "ProductionYear,RunTimeTicks,SeriesName,IndexNumber,ParentIndexNumber"
+        }
+      });
+
+      const rows = Array.isArray(response?.data?.Items) ? response.data.Items : [];
+      return rows.map(normalizeItem);
+    },
+    getNowPlaying: async (limit = 8) => {
+      const client = getClient();
+      const normalizedLimit = Math.max(1, Math.min(20, Number(limit || 8)));
+
+      const response = await client.get(buildEndpoint("Sessions"), {
+        params: {
+          ActiveWithinSeconds: 3600
+        }
+      });
+
+      const sessions = Array.isArray(response?.data) ? response.data : [];
+      const nowPlaying = sessions
+        .filter((session) => session?.NowPlayingItem)
+        .map((session) => {
+          const item = normalizeItem(session.NowPlayingItem);
+          const percent = computePlaybackPercent(
+            session?.PlayState?.PositionTicks,
+            session?.NowPlayingItem?.RunTimeTicks
+          );
+
+          return {
+            ...item,
+            playbackPercent: percent,
+            playMethod: session?.PlayState?.PlayMethod || "Unknown",
+            paused: Boolean(session?.PlayState?.IsPaused)
+          };
+        })
+        .slice(0, normalizedLimit);
+
+      return {
+        activeSessions: sessions.length,
+        nowPlaying
+      };
+    },
+    getLibrarySections: async () => {
+      const client = getClient();
+
+      const response = await client.get(buildEndpoint("Library/VirtualFolders"));
+      const folders = Array.isArray(response?.data) ? response.data : [];
+
+      return folders.map((folder) => ({
+        name: folder?.Name || "Unnamed",
+        collectionType: folder?.CollectionType || "mixed",
+        pathCount: Array.isArray(folder?.Locations) ? folder.Locations.length : 0
+      }));
+    },
+    ticksToDuration
   };
 }
 

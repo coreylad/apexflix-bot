@@ -208,13 +208,13 @@ function createOverseerrClient(config) {
       return 7;
     }
 
-    if ([4, 5, 6].includes(mediaStatusCode)) {
-      return mediaStatusCode;
+    if (requestStatus === 8) {
+      // Treat completed request as available for downstream channel routing.
+      return 4;
     }
 
-    if (requestStatus === 8) {
-      // Completed request normally means media finished and imported.
-      return 4;
+    if ([4, 5, 6].includes(mediaStatusCode)) {
+      return mediaStatusCode;
     }
 
     if (requestStatus > 0) {

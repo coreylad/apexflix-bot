@@ -45,7 +45,46 @@ function buildCommands() {
       ),
     new SlashCommandBuilder()
       .setName("recent")
-      .setDescription("Show latest items from Jellyfin")
+      .setDescription("Show latest items from Jellyfin"),
+    new SlashCommandBuilder()
+      .setName("jellysearch")
+      .setDescription("Search your Jellyfin library")
+      .addStringOption((option) =>
+        option
+          .setName("query")
+          .setDescription("Title or keyword")
+          .setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("media_type")
+          .setDescription("Filter by library item type")
+          .addChoices(
+            { name: "All", value: "all" },
+            { name: "Movie", value: "movie" },
+            { name: "Series", value: "series" },
+            { name: "Episode", value: "episode" },
+            { name: "Audio", value: "audio" }
+          )
+          .setRequired(false)
+      ),
+    new SlashCommandBuilder()
+      .setName("jellystats")
+      .setDescription("Show Jellyfin media library and usage stats"),
+    new SlashCommandBuilder()
+      .setName("nowplaying")
+      .setDescription("Show currently playing media in Jellyfin")
+      .addIntegerOption((option) =>
+        option
+          .setName("limit")
+          .setDescription("How many active plays to show (1-10)")
+          .setRequired(false)
+          .setMinValue(1)
+          .setMaxValue(10)
+      ),
+    new SlashCommandBuilder()
+      .setName("libraries")
+      .setDescription("Show Jellyfin library sections and types")
   ];
 }
 

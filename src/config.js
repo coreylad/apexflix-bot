@@ -26,6 +26,16 @@ function optional(name, fallback = "") {
   return process.env[name] || fallback;
 }
 
+function firstDefined(names, fallback = "") {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) {
+      return value;
+    }
+  }
+  return fallback;
+}
+
 const config = {
   discord: {},
   overseerr: {},
@@ -38,12 +48,12 @@ function refreshConfigFromProcess() {
   config.discord.clientId = optional("DISCORD_CLIENT_ID");
   config.discord.guildId = optional("DISCORD_GUILD_ID");
 
-  config.overseerr.baseUrl = optional("OVERSEERR_BASE_URL").replace(/\/$/, "");
+  config.overseerr.url = firstDefined(["OVERSEERR_URL", "OVERSEERR_BASE_URL"]).replace(/\/$/, "");
   config.overseerr.apiKey = optional("OVERSEERR_API_KEY");
   config.overseerr.defaultUserId = optionalNumber("OVERSEERR_DEFAULT_USER_ID", 1);
   config.overseerr.allowInsecureTls = optionalBoolean("OVERSEERR_ALLOW_INSECURE_TLS", false);
 
-  config.jellyfin.baseUrl = optional("JELLYFIN_BASE_URL").replace(/\/$/, "");
+  config.jellyfin.url = firstDefined(["JELLYFIN_URL", "JELLYFIN_BASE_URL"]).replace(/\/$/, "");
   config.jellyfin.apiKey = optional("JELLYFIN_API_KEY");
   config.jellyfin.userId = optional("JELLYFIN_USER_ID");
   config.jellyfin.allowInsecureTls = optionalBoolean("JELLYFIN_ALLOW_INSECURE_TLS", false);

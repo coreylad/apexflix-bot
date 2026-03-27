@@ -19,7 +19,7 @@ function createRequestPoller({ config, logger, db, overseerr, bot }) {
   let timer = null;
 
   async function cycle() {
-    if (!config.overseerr.baseUrl || !config.overseerr.apiKey) {
+    if (!config.overseerr.url || !config.overseerr.apiKey) {
       return;
     }
 

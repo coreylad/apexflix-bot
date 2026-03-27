@@ -170,7 +170,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     }
   }
 
-  client.once("ready", async () => {
+  client.once("clientReady", async () => {
     logger.info(`Discord bot logged in as ${client.user.tag}`);
 
     try {

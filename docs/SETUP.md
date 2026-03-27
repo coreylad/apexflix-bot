@@ -66,10 +66,10 @@ ApexFlix can be configured entirely from the browser.
 DISCORD_TOKEN
 DISCORD_CLIENT_ID
 DISCORD_GUILD_ID
-OVERSEERR_BASE_URL
+OVERSEERR_URL
 OVERSEERR_API_KEY
 OVERSEERR_DEFAULT_USER_ID
-JELLYFIN_BASE_URL
+JELLYFIN_URL
 JELLYFIN_API_KEY
 JELLYFIN_USER_ID
 PORT
@@ -284,13 +284,13 @@ This is the recommended setup if you want HTTPS from the internet.
 If Overseerr is behind your proxy at `https://media.example.com/overseerr`, set:
 
 ```text
-OVERSEERR_BASE_URL=https://media.example.com/overseerr
+OVERSEERR_URL=https://media.example.com/overseerr
 ```
 
 If Jellyfin is behind your proxy at `https://media.example.com/jellyfin`, set:
 
 ```text
-JELLYFIN_BASE_URL=https://media.example.com/jellyfin
+JELLYFIN_URL=https://media.example.com/jellyfin
 ```
 
 Use the full URL exactly as it is reachable from the ApexFlix server.

@@ -128,9 +128,30 @@ pre {
 
 .settings-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 0.7rem;
   margin-top: 0.8rem;
+}
+
+.settings-group {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: rgba(5, 8, 12, 0.36);
+}
+
+.settings-group h3 {
+  margin: 0 0 0.7rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.settings-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
 }
 
 .admin-bar {
@@ -199,7 +220,7 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .settings-form {
+  .settings-group-grid {
     grid-template-columns: 1fr;
   }
 }

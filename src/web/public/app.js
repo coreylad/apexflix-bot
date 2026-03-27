@@ -49,14 +49,73 @@ function showPanel(panelId) {
 function renderEnvForm(targetId, allowedKeys, values) {
   const form = document.getElementById(targetId);
 
-  form.innerHTML = allowedKeys
-    .map((key) => {
-      const safeValue = escapeHtml(values[key] || "");
+  const groups = [
+    {
+      title: "Discord",
+      keys: ["DISCORD_TOKEN", "DISCORD_CLIENT_ID", "DISCORD_GUILD_ID"]
+    },
+    {
+      title: "Overseerr",
+      keys: [
+        "OVERSEERR_URL",
+        "OVERSEERR_BASE_URL",
+        "OVERSEERR_API_KEY",
+        "OVERSEERR_DEFAULT_USER_ID",
+        "OVERSEERR_ALLOW_INSECURE_TLS"
+      ]
+    },
+    {
+      title: "Jellyfin",
+      keys: [
+        "JELLYFIN_URL",
+        "JELLYFIN_BASE_URL",
+        "JELLYFIN_API_KEY",
+        "JELLYFIN_USER_ID",
+        "JELLYFIN_ALLOW_INSECURE_TLS"
+      ]
+    },
+    {
+      title: "App And Reverse Proxy",
+      keys: ["PORT", "REQUEST_STATUS_POLL_SECONDS", "LOG_LEVEL", "TRUST_PROXY", "APP_BASE_PATH"]
+    }
+  ];
+
+  const seen = new Set(groups.flatMap((group) => group.keys));
+  const extraKeys = allowedKeys.filter((key) => !seen.has(key));
+  if (extraKeys.length > 0) {
+    groups.push({ title: "Other", keys: extraKeys });
+  }
+
+  const allowedSet = new Set(allowedKeys);
+
+  form.innerHTML = groups
+    .map((group) => {
+      const keys = group.keys.filter((key) => allowedSet.has(key));
+      if (keys.length === 0) {
+        return "";
+      }
+
+      const fields = keys
+        .map((key) => {
+          const safeValue = escapeHtml(values[key] || "");
+          const label =
+            key === "OVERSEERR_BASE_URL" || key === "JELLYFIN_BASE_URL"
+              ? `${key} (legacy)`
+              : key;
+          return `
+            <label>
+              ${label}
+              <input name="${key}" type="text" value="${safeValue}" />
+            </label>
+          `;
+        })
+        .join("");
+
       return `
-        <label>
-          ${key}
-          <input name="${key}" type="text" value="${safeValue}" />
-        </label>
+        <section class="settings-group">
+          <h3>${group.title}</h3>
+          <div class="settings-group-grid">${fields}</div>
+        </section>
       `;
     })
     .join("");

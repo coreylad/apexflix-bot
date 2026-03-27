@@ -88,12 +88,15 @@ This app supports reverse proxies for both directions:
 - Inbound app hosting behind Nginx/Caddy/Traefik (including subpath mounting)
 
 Key settings:
-- `OVERSEERR_BASE_URL`: full external/internal URL ApexFlix should call, e.g. `https://media.example.com/overseerr`
-- `JELLYFIN_BASE_URL`: full URL ApexFlix should call, e.g. `https://media.example.com/jellyfin`
+- `OVERSEERR_URL`: full external/internal URL ApexFlix should call, e.g. `https://apexflix.xyz/coreylad/overseerr`
+- `JELLYFIN_URL`: full URL ApexFlix should call, e.g. `https://apexflix.xyz/coreylad/jellyfin`
 - `TRUST_PROXY=true`: trust `X-Forwarded-*` headers so secure cookies work behind HTTPS proxies
 - `APP_BASE_PATH=/` (or `/apexflix`): mount ApexFlix under a subpath
 - `OVERSEERR_ALLOW_INSECURE_TLS=true` only if your proxy uses self-signed TLS
 - `JELLYFIN_ALLOW_INSECURE_TLS=true` only if your proxy uses self-signed TLS
+
+Legacy compatibility:
+- `OVERSEERR_BASE_URL` and `JELLYFIN_BASE_URL` are still accepted, but `OVERSEERR_URL` and `JELLYFIN_URL` are preferred.
 
 ## Notes
 

@@ -68,12 +68,25 @@ function createWebServer({ config, logger, db, overseerr, jellyfin, envManager }
 
   return {
     start: () =>
-      new Promise((resolve) => {
+      new Promise((resolve, reject) => {
         const server = app.listen(config.app.port, () => {
           logger.info(
             `Web UI listening on port ${config.app.port}${basePath === "/" ? "" : ` with base path ${basePath}`}`
           );
           resolve(server);
+        });
+
+        server.once("error", (error) => {
+          if (error?.code === "EADDRINUSE") {
+            reject(
+              new Error(
+                `Port ${config.app.port} is already in use. Stop the process using that port or set a different PORT value in your environment.`
+              )
+            );
+            return;
+          }
+
+          reject(error);
         });
       })
   };

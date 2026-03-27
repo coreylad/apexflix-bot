@@ -9,21 +9,48 @@ const REQUEST_STATUS = {
 };
 
 function createOverseerrClient(config) {
+  function normalizedBaseUrl() {
+    const raw = String(config.url || "").trim();
+    if (!raw) {
+      return "";
+    }
+
+    return raw.replace(/\/+$/, "");
+  }
+
+  function buildEndpoint(pathname) {
+    const base = normalizedBaseUrl();
+    const path = String(pathname || "").replace(/^\/+/, "");
+    return `${base}/${path}`;
+  }
+
   function ensureConfigured() {
-    if (!config.baseUrl || !config.apiKey) {
-      throw new Error("Overseerr is not configured yet. Set OVERSEERR_BASE_URL and OVERSEERR_API_KEY.");
+    const base = normalizedBaseUrl();
+    if (!base || !config.apiKey) {
+      throw new Error("Overseerr is not configured yet. Set OVERSEERR_URL and OVERSEERR_API_KEY.");
+    }
+
+    try {
+      const parsed = new URL(base);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("unsupported protocol");
+      }
+    } catch (error) {
+      throw new Error(
+        "Invalid OVERSEERR_URL. Use a full URL such as https://apexflix.xyz/coreylad/overseerr"
+      );
     }
   }
 
   function getClient() {
+    const base = normalizedBaseUrl();
     ensureConfigured();
     const httpsAgent =
-      config.allowInsecureTls && config.baseUrl.startsWith("https://")
+      config.allowInsecureTls && base.startsWith("https://")
         ? new https.Agent({ rejectUnauthorized: false })
         : undefined;
 
     return axios.create({
-      baseURL: config.baseUrl,
       headers: {
         "X-Api-Key": config.apiKey,
         "Content-Type": "application/json"
@@ -48,7 +75,7 @@ function createOverseerrClient(config) {
     getRequestStatusText: (status) => REQUEST_STATUS[status] || `Unknown (${status})`,
     searchMedia: async (query, mediaType = "all") => {
       const client = getClient();
-      const response = await client.get("/api/v1/search", {
+      const response = await client.get(buildEndpoint("api/v1/search"), {
         params: { query }
       });
 
@@ -62,7 +89,7 @@ function createOverseerrClient(config) {
     },
     requestMedia: async ({ mediaType, mediaId, userId }) => {
       const client = getClient();
-      const response = await client.post("/api/v1/request", {
+      const response = await client.post(buildEndpoint("api/v1/request"), {
         mediaType,
         mediaId,
         userId
@@ -71,19 +98,19 @@ function createOverseerrClient(config) {
     },
     getRequestById: async (requestId) => {
       const client = getClient();
-      const response = await client.get(`/api/v1/request/${requestId}`);
+      const response = await client.get(buildEndpoint(`api/v1/request/${requestId}`));
       return response.data;
     },
     getRecentRequests: async (take = 20) => {
       const client = getClient();
-      const response = await client.get("/api/v1/request", {
+      const response = await client.get(buildEndpoint("api/v1/request"), {
         params: { take, skip: 0 }
       });
       return response.data?.results || [];
     },
     findUserByUsername: async (username) => {
       const client = getClient();
-      const response = await client.get("/api/v1/user", {
+      const response = await client.get(buildEndpoint("api/v1/user"), {
         params: { take: 100, skip: 0, sort: "created" }
       });
 

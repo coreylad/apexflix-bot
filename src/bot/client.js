@@ -1296,7 +1296,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
 
       const title = String(created.artistName || selected.artistName || query).trim();
       const localArtistId = Number(created.id || 0);
-      const requestId = localArtistId > 0 ? `LIDARR-${localArtistId}` : `LIDARR-${Date.now()}`;
+      const requestId = -Math.max(localArtistId || Date.now(), 1);
 
       db.upsertRequestEvent({
         requestId,
@@ -1328,7 +1328,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         artistId: localArtistId > 0 ? localArtistId : 0,
         genres: created.genres || selected.genres || [],
         status: created.status || "Added to Lidarr",
-        requestId: requestId,
+        requestId: localArtistId > 0 ? `LIDARR-${localArtistId}` : String(requestId),
         requesterDiscordId: interaction.user.id,
         requesterUsername: interaction.user.username,
         image: ""

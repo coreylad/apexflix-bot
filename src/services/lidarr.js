@@ -181,6 +181,14 @@ function createLidarrClient(config) {
     return coerceArrayResponse(response?.data);
   }
 
+  function toIsoDate(value) {
+    if (!value) {
+      return "";
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+  }
+
   return {
     getDefaults,
     getOptions: async () => {
@@ -289,6 +297,44 @@ function createLidarrClient(config) {
         albumCount,
         rootFolderCount
       };
+    },
+    getRecentArtists: async (limit = 12) => {
+      const max = Math.max(1, Math.min(50, Number(limit || 12)));
+      const artists = await getArtists();
+
+      return artists
+        .map((artist) => ({
+          id: asPositiveInteger(artist.id, 0),
+          artistName: String(artist.artistName || artist.sortName || "Unknown artist").trim(),
+          monitored: Boolean(artist.monitored),
+          status: String(artist.status || "").trim(),
+          artistType: String(artist.artistType || "Artist").trim(),
+          albumCount: asPositiveInteger(artist.statistics?.albumCount || artist.albumCount, 0),
+          added: toIsoDate(artist.added)
+        }))
+        .sort((a, b) => new Date(b.added || 0).getTime() - new Date(a.added || 0).getTime())
+        .slice(0, max);
+    },
+    getTopGenres: async (limit = 8) => {
+      const max = Math.max(1, Math.min(20, Number(limit || 8)));
+      const artists = await getArtists();
+      const genreCounts = new Map();
+
+      for (const artist of artists) {
+        const genres = Array.isArray(artist?.genres) ? artist.genres : [];
+        for (const genre of genres) {
+          const key = String(genre || "").trim();
+          if (!key) {
+            continue;
+          }
+          genreCounts.set(key, (genreCounts.get(key) || 0) + 1);
+        }
+      }
+
+      return Array.from(genreCounts.entries())
+        .map(([genre, artistCount]) => ({ genre, artistCount }))
+        .sort((a, b) => b.artistCount - a.artistCount || a.genre.localeCompare(b.genre))
+        .slice(0, max);
     }
   };
 }

@@ -35,6 +35,37 @@ function buildCommands() {
       .setName("requesthelp")
       .setDescription("Show how to use the /request command with TV seasons"),
     new SlashCommandBuilder()
+      .setName("musicsearch")
+      .setDescription("Search Lidarr for artists")
+      .addStringOption((option) =>
+        option
+          .setName("query")
+          .setDescription("Artist name, MBID, or MusicBrainz URL")
+          .setRequired(true)
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName("limit")
+          .setDescription("How many results to show (1-10)")
+          .setRequired(false)
+          .setMinValue(1)
+          .setMaxValue(10)
+      ),
+    new SlashCommandBuilder()
+      .setName("musicstats")
+      .setDescription("Show Lidarr music library stats"),
+    new SlashCommandBuilder()
+      .setName("musicrecent")
+      .setDescription("Show recently added artists in Lidarr")
+      .addIntegerOption((option) =>
+        option
+          .setName("limit")
+          .setDescription("How many artists to show (1-10)")
+          .setRequired(false)
+          .setMinValue(1)
+          .setMaxValue(10)
+      ),
+    new SlashCommandBuilder()
       .setName("status")
       .setDescription("Check request status in Overseerr")
       .addIntegerOption((option) =>

@@ -325,6 +325,8 @@ function onTabActivated(id) {
       loadRequestsTable();
       loadLidarrOptions();
       loadLidarrLibraryStats();
+      loadLidarrArtists();
+      loadLidarrGenres();
       break;
     case "tabJellyfin":
       loadJellyfinStats();
@@ -623,6 +625,56 @@ async function loadLidarrLibraryStats() {
   }
 }
 
+async function loadLidarrArtists() {
+  const tbody = document.getElementById("lidarrArtistsBody");
+  if (!tbody) return;
+
+  try {
+    const data = await fetchJson("api/lidarr/artists?limit=12");
+    const artists = data.artists || [];
+    if (!artists.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No Lidarr artists found</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = artists
+      .map((artist) => {
+        const status = artist.monitored
+          ? `<span class="badge badge-green">Monitored</span>`
+          : `<span class="badge badge-muted">Unmonitored</span>`;
+        return `<tr>
+          <td>${escapeHtml(artist.artistName || "Unknown artist")}</td>
+          <td>${status}</td>
+          <td class="muted-text">${Number(artist.albumCount || 0)}</td>
+          <td class="muted-text">${fmtDate(artist.added)}</td>
+        </tr>`;
+      })
+      .join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Failed to load</td></tr>`;
+  }
+}
+
+async function loadLidarrGenres() {
+  const tbody = document.getElementById("lidarrGenresBody");
+  if (!tbody) return;
+
+  try {
+    const data = await fetchJson("api/lidarr/genres?limit=10");
+    const genres = data.genres || [];
+    if (!genres.length) {
+      tbody.innerHTML = `<tr><td colspan="2" class="empty-state">No genre data available</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = genres
+      .map((row) => `<tr><td>${escapeHtml(row.genre || "Unknown")}</td><td class="muted-text">${Number(row.artistCount || 0)}</td></tr>`)
+      .join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="2" class="empty-state">Failed to load</td></tr>`;
+  }
+}
+
 function applyLidarrOptions(data) {
   const hint = document.getElementById("lidarrOptionsHint");
   const defaults = data.defaults || {};
@@ -745,6 +797,9 @@ async function requestLidarrArtist(index) {
     lidarrArtistResults[index].inLibrary = true;
     renderLidarrResults(lidarrArtistResults);
     loadRequestsTable();
+    loadLidarrLibraryStats();
+    loadLidarrArtists();
+    loadLidarrGenres();
   } catch (err) {
     setMsg("lidarrMsg", err.message, "err");
   }
@@ -1383,6 +1438,8 @@ function wireAll(user) {
   bindButtonClick("lidarrOptionsRefreshBtn", async () => {
     await loadLidarrOptions();
     await loadLidarrLibraryStats();
+    await loadLidarrArtists();
+    await loadLidarrGenres();
   });
 
   // Jellyfin

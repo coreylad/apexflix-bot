@@ -1126,7 +1126,12 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
       "- For TV, season is required in the form.",
       "- For movies, leave season empty.",
       "- For music, leave season empty.",
-      "- Seasons are validated against Seerr metadata before requesting."
+      "- Seasons are validated against Seerr metadata before requesting.",
+      "",
+      "Lidarr shortcuts:",
+      "- /musicsearch",
+      "- /musicstats",
+      "- /musicrecent"
     ].join("\n");
 
     await interaction.reply(toEphemeralResponse(helpText));
@@ -1633,6 +1638,86 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     await interaction.reply(toEphemeralResponse(`Jellyfin library sections:\n${lines}`));
   }
 
+  async function handleMusicSearch(interaction) {
+    const query = interaction.options.getString("query", true);
+    const limit = interaction.options.getInteger("limit") || 5;
+
+    if (!lidarr || typeof lidarr.searchArtists !== "function") {
+      await interaction.reply(toEphemeralResponse("Lidarr is not configured on this bot yet."));
+      return;
+    }
+
+    const results = await lidarr.searchArtists(query);
+    if (!results.length) {
+      await interaction.reply(toEphemeralResponse(`No Lidarr artist results found for: ${query}`));
+      return;
+    }
+
+    const lines = results
+      .slice(0, limit)
+      .map((item) => {
+        const state = item.inLibrary ? "in library" : "available";
+        const type = item.artistType || "Artist";
+        return `• ${item.artistName} (${type}, ${state})`;
+      })
+      .join("\n");
+
+    await interaction.reply(toEphemeralResponse(`Lidarr artist search:\n${lines}`));
+  }
+
+  async function handleMusicStats(interaction) {
+    if (!lidarr || typeof lidarr.getLibraryStats !== "function") {
+      await interaction.reply(toEphemeralResponse("Lidarr is not configured on this bot yet."));
+      return;
+    }
+
+    const [stats, genres] = await Promise.all([
+      lidarr.getLibraryStats(),
+      typeof lidarr.getTopGenres === "function" ? lidarr.getTopGenres(6) : Promise.resolve([])
+    ]);
+
+    const genreText = genres.length
+      ? genres.map((row) => `• ${row.genre}: ${row.artistCount}`).join("\n")
+      : "No genres available.";
+
+    const lines = [
+      "Lidarr stats:",
+      `• Artists: ${stats.artistCount}`,
+      `• Monitored artists: ${stats.monitoredArtistCount}`,
+      `• Albums: ${stats.albumCount}`,
+      `• Root folders: ${stats.rootFolderCount}`,
+      "",
+      "Top genres:",
+      genreText
+    ];
+
+    await interaction.reply(toEphemeralResponse(lines.join("\n")));
+  }
+
+  async function handleMusicRecent(interaction) {
+    const limit = interaction.options.getInteger("limit") || 5;
+
+    if (!lidarr || typeof lidarr.getRecentArtists !== "function") {
+      await interaction.reply(toEphemeralResponse("Lidarr is not configured on this bot yet."));
+      return;
+    }
+
+    const artists = await lidarr.getRecentArtists(limit);
+    if (!artists.length) {
+      await interaction.reply(toEphemeralResponse("No recent Lidarr artists found."));
+      return;
+    }
+
+    const lines = artists
+      .map((artist) => {
+        const monitored = artist.monitored ? "monitored" : "unmonitored";
+        return `• ${artist.artistName} (${monitored}, albums: ${artist.albumCount || 0})`;
+      })
+      .join("\n");
+
+    await interaction.reply(toEphemeralResponse(`Recent Lidarr artists:\n${lines}`));
+  }
+
   async function publishJellyfinNowPlayingSnapshot({ forced = false } = {}) {
     if (!online) {
       return { ok: false, message: "Discord bot is not online." };
@@ -1789,6 +1874,15 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
           break;
         case "request":
           await handleRequest(interaction);
+          break;
+        case "musicsearch":
+          await handleMusicSearch(interaction);
+          break;
+        case "musicstats":
+          await handleMusicStats(interaction);
+          break;
+        case "musicrecent":
+          await handleMusicRecent(interaction);
           break;
         case "status":
           await handleStatus(interaction);

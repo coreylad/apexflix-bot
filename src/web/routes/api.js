@@ -1117,6 +1117,34 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
     }
   });
 
+  router.get("/lidarr/artists", async (req, res, next) => {
+    try {
+      if (!lidarr || typeof lidarr.getRecentArtists !== "function") {
+        return res.status(503).json({ error: "Lidarr service is unavailable." });
+      }
+
+      const limit = Math.min(Number(req.query.limit) || 12, 50);
+      const artists = await lidarr.getRecentArtists(limit);
+      return res.json({ ok: true, count: artists.length, artists });
+    } catch (error) {
+      next(new Error(`Lidarr artists failed: ${error.message}`));
+    }
+  });
+
+  router.get("/lidarr/genres", async (req, res, next) => {
+    try {
+      if (!lidarr || typeof lidarr.getTopGenres !== "function") {
+        return res.status(503).json({ error: "Lidarr service is unavailable." });
+      }
+
+      const limit = Math.min(Number(req.query.limit) || 8, 20);
+      const genres = await lidarr.getTopGenres(limit);
+      return res.json({ ok: true, count: genres.length, genres });
+    } catch (error) {
+      next(new Error(`Lidarr genres failed: ${error.message}`));
+    }
+  });
+
   router.get("/lidarr/search", async (req, res, next) => {
     try {
       if (!lidarr || typeof lidarr.searchArtists !== "function") {

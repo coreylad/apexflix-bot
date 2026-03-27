@@ -1472,7 +1472,7 @@ function wireAll(user) {
   bindButtonClick("dashRefreshLatest", loadDashboardLatest);
   bindButtonClick("dashRefreshRequests", loadDashboardRequests);
   bindButtonClick("dashBackfillBtn", async () => {
-    setMsg("dashBackfillMsg", "Running backfill", "info");
+    setMsg("dashBackfillMsg", "Running Seerr + Lidarr backfill", "info");
     try {
       const data = await fetchJson("api/admin/requests/backfill", { method: "POST" });
       setMsg("dashBackfillMsg", data.message || "Backfill complete.", "ok");

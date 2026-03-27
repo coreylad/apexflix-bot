@@ -678,9 +678,50 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
       const requestIds = db.getAllRequestIds();
       let updated = 0;
       let skipped = 0;
+      let seerrUpdated = 0;
+      let lidarrUpdated = 0;
 
       for (const requestId of requestIds) {
         try {
+          const existing = db.getRequestEventById(requestId);
+          const existingType = String(existing?.media_type || "").toLowerCase();
+
+          if (existingType === "music") {
+            if (!lidarr || typeof lidarr.getArtistById !== "function") {
+              skipped += 1;
+              continue;
+            }
+
+            const artistIdFromRow = Number(existing?.media_id || 0);
+            const fallbackArtistId = Math.abs(Number(requestId || 0));
+            const artistId = artistIdFromRow > 0 ? artistIdFromRow : fallbackArtistId;
+
+            if (!artistId || !Number.isInteger(artistId) || artistId <= 0) {
+              skipped += 1;
+              continue;
+            }
+
+            const artist = await lidarr.getArtistById(artistId);
+            if (!artist) {
+              skipped += 1;
+              continue;
+            }
+
+            db.upsertRequestEvent({
+              requestId,
+              mediaType: "music",
+              mediaId: Number(artist.id || artistId),
+              title: firstNonEmpty([artist.artistName, existing?.title], "Unknown artist"),
+              status: Number(existing?.status || 2),
+              statusText: firstNonEmpty([artist.status, existing?.status_text], "Added to Lidarr"),
+              requestedBy: existing?.requested_by || null
+            });
+
+            updated += 1;
+            lidarrUpdated += 1;
+            continue;
+          }
+
           const details = await overseerr.getRequestById(requestId);
           if (!details || typeof details !== "object") {
             skipped += 1;
@@ -726,6 +767,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
           });
 
           updated += 1;
+          seerrUpdated += 1;
         } catch (error) {
           skipped += 1;
         }
@@ -735,8 +777,10 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
         ok: true,
         updated,
         skipped,
+        seerrUpdated,
+        lidarrUpdated,
         total: requestIds.length,
-        message: `Backfill complete. Updated ${updated} request rows; skipped ${skipped}.`
+        message: `Backfill complete. Updated ${updated} rows (Seerr: ${seerrUpdated}, Lidarr: ${lidarrUpdated}); skipped ${skipped}.`
       });
     } catch (error) {
       next(error);

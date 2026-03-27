@@ -319,6 +319,36 @@ async function sendDailyNewsNow() {
   setMessage("dailyNewsResult", response.message || "Daily news report sent.");
 }
 
+async function generateSystemdUnit() {
+  const form = document.getElementById("systemdForm");
+  const formData = new FormData(form);
+
+  const payload = {
+    serviceName: String(formData.get("serviceName") || "apexflix").trim(),
+    user: String(formData.get("serviceUser") || "").trim(),
+    group: String(formData.get("serviceGroup") || "").trim(),
+    workingDirectory: String(formData.get("workingDirectory") || "").trim(),
+    execStart: String(formData.get("execStart") || "").trim(),
+    nodeEnv: String(formData.get("nodeEnv") || "production").trim()
+  };
+
+  const response = await fetchJson("api/admin/systemd/deploy", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  setMessage("systemdResult", response.message || "Systemd unit generated.");
+
+  const commandsBox = document.getElementById("systemdCommands");
+  const unitBox = document.getElementById("systemdUnitPreview");
+
+  commandsBox.textContent = (response.recommendedManualCommands || []).join("\n");
+  unitBox.textContent = response.unit || "";
+}
+
 async function checkSession() {
   try {
     const me = await fetchJson("api/auth/me");
@@ -352,6 +382,7 @@ function wireAuth() {
   const saveEnvBtn = document.getElementById("saveEnvBtn");
   const saveBotConfigBtn = document.getElementById("saveBotConfigBtn");
   const sendDailyNewsBtn = document.getElementById("sendDailyNewsBtn");
+  const generateSystemdBtn = document.getElementById("generateSystemdBtn");
   const backfillRequestsBtn = document.getElementById("backfillRequestsBtn");
   const passwordForm = document.getElementById("passwordForm");
 
@@ -450,6 +481,14 @@ function wireAuth() {
       await sendDailyNewsNow();
     } catch (error) {
       setMessage("dailyNewsResult", error.message, true);
+    }
+  });
+
+  generateSystemdBtn.addEventListener("click", async () => {
+    try {
+      await generateSystemdUnit();
+    } catch (error) {
+      setMessage("systemdResult", error.message, true);
     }
   });
 

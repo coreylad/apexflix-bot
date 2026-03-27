@@ -1,4 +1,6 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const { generateSessionToken, verifyPassword, hashPassword } = require("../../services/security");
 
 const DEFAULT_BOT_CONFIG = {
@@ -137,6 +139,41 @@ function requireAuth(db) {
 function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
+
+  function sanitizeServiceName(value) {
+    const raw = String(value || "apexflix").trim();
+    return /^[a-zA-Z0-9_.@-]+$/.test(raw) ? raw : "";
+  }
+
+  function sanitizeAccountName(value, fallback) {
+    const raw = String(value || fallback || "").trim();
+    return /^[a-z_][a-z0-9_-]*\$?$/i.test(raw) ? raw : "";
+  }
+
+  function buildSystemdUnit({ serviceName, user, group, workingDirectory, execStart, nodeEnv }) {
+    return [
+      "[Unit]",
+      `Description=${serviceName} service`,
+      "After=network-online.target",
+      "Wants=network-online.target",
+      "",
+      "[Service]",
+      "Type=simple",
+      `User=${user}`,
+      `Group=${group}`,
+      `WorkingDirectory=${workingDirectory}`,
+      `Environment=NODE_ENV=${nodeEnv}`,
+      `ExecStart=${execStart}`,
+      "Restart=always",
+      "RestartSec=5",
+      "KillSignal=SIGINT",
+      "TimeoutStopSec=20",
+      "",
+      "[Install]",
+      "WantedBy=multi-user.target",
+      ""
+    ].join("\n");
+  }
 
   function buildSessionCookie(req, value, maxAgeSeconds) {
     const secure = req.secure ? "; Secure" : "";
@@ -313,6 +350,78 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot }) {
           availableCount: result.availableCount,
           usage: result.usage
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/systemd/deploy", authMiddleware, async (req, res, next) => {
+    try {
+      if (process.platform !== "linux") {
+        return res.status(400).json({
+          error: "Systemd deployment is only supported on Linux hosts.",
+          details: { platform: process.platform }
+        });
+      }
+
+      const requested = req.body || {};
+      const serviceName = sanitizeServiceName(requested.serviceName || "apexflix");
+      if (!serviceName) {
+        return res.status(400).json({ error: "serviceName contains invalid characters." });
+      }
+
+      const currentUser = String(process.env.USER || process.env.LOGNAME || "apexflix");
+      const user = sanitizeAccountName(requested.user, currentUser);
+      const group = sanitizeAccountName(requested.group, user || currentUser);
+      if (!user || !group) {
+        return res.status(400).json({ error: "user/group contains invalid characters." });
+      }
+
+      const workingDirectory = path.resolve(String(requested.workingDirectory || process.cwd()));
+      if (!fs.existsSync(workingDirectory)) {
+        return res.status(400).json({ error: `Working directory does not exist: ${workingDirectory}` });
+      }
+
+      const execStart = String(requested.execStart || "/usr/bin/npm start").trim();
+      if (!execStart) {
+        return res.status(400).json({ error: "execStart is required." });
+      }
+
+      const nodeEnv = String(requested.nodeEnv || "production").trim() || "production";
+
+      const unit = buildSystemdUnit({
+        serviceName,
+        user,
+        group,
+        workingDirectory,
+        execStart,
+        nodeEnv
+      });
+
+      const workspaceUnitPath = path.join(process.cwd(), "deploy", "systemd", `${serviceName}.service`);
+      fs.mkdirSync(path.dirname(workspaceUnitPath), { recursive: true });
+      fs.writeFileSync(workspaceUnitPath, unit, "utf8");
+
+      const installPath = `/etc/systemd/system/${serviceName}.service`;
+
+      return res.json({
+        ok: true,
+        message: `Systemd unit file generated at ${workspaceUnitPath}. No service actions were run from web UI.`,
+        serviceName,
+        workspaceUnitPath,
+        installPath,
+        mode: "generate-only",
+        recommendedManualCommands: [
+          "# Stop the currently running foreground bot first to avoid port conflicts",
+          "# Example: pkill -f \"node src/index.js\"",
+          `sudo cp ${workspaceUnitPath} ${installPath}`,
+          "sudo systemctl daemon-reload",
+          `sudo systemctl enable ${serviceName}`,
+          `sudo systemctl restart ${serviceName}`,
+          `sudo systemctl status ${serviceName}`
+        ],
+        unit
       });
     } catch (error) {
       next(error);

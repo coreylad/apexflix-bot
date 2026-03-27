@@ -240,6 +240,56 @@
           <p id="dailyNewsResult"></p>
         </article>
 
+        <article class="card env-card">
+          <h2>Systemd Deploy Helper (Linux)</h2>
+          <p class="muted">
+            Generates a systemd unit file and prints manual deploy commands. This does not restart services from the web UI to avoid port conflicts.
+          </p>
+          <form id="systemdForm" class="settings-form">
+            <section class="settings-group">
+              <h3>Service Settings</h3>
+              <div class="settings-group-grid">
+                <label>
+                  Service Name
+                  <input name="serviceName" type="text" value="apexflix" />
+                </label>
+                <label>
+                  Linux User
+                  <input name="serviceUser" type="text" placeholder="apexflix" />
+                </label>
+                <label>
+                  Linux Group
+                  <input name="serviceGroup" type="text" placeholder="apexflix" />
+                </label>
+                <label>
+                  Working Directory
+                  <input name="workingDirectory" type="text" placeholder="/opt/apexflix" />
+                </label>
+                <label>
+                  ExecStart
+                  <input name="execStart" type="text" value="/usr/bin/npm start" />
+                </label>
+                <label>
+                  NODE_ENV
+                  <input name="nodeEnv" type="text" value="production" />
+                </label>
+              </div>
+            </section>
+          </form>
+          <div class="admin-actions">
+            <button id="generateSystemdBtn" type="button">Generate Unit And Deploy Instructions</button>
+          </div>
+          <p id="systemdResult"></p>
+          <section class="settings-group">
+            <h3>Deploy Commands</h3>
+            <pre id="systemdCommands" class="console-box">No commands generated yet.</pre>
+          </section>
+          <section class="settings-group">
+            <h3>Unit File Preview</h3>
+            <pre id="systemdUnitPreview" class="console-box">No unit generated yet.</pre>
+          </section>
+        </article>
+
         <article class="card">
           <h2>Change Admin Password</h2>
           <form id="passwordForm">

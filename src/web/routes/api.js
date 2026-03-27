@@ -166,8 +166,8 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
   const router = express.Router();
   const authMiddleware = requireAuth(db);
 
-  function resolveFfmpegLogDir() {
-    const raw = String(config?.jellyfin?.ffmpegLogDir || "").trim() || "/var/log/jellyfin";
+  function resolveJellyfinLogDir() {
+    const raw = String(config?.jellyfin?.logDir || "").trim() || "/var/log/jellyfin";
     return path.resolve(raw);
   }
 
@@ -449,12 +449,12 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
     }
   });
 
-  router.get("/admin/jellyfin/ffmpeg/files", authMiddleware, (req, res, next) => {
+  router.get("/admin/jellyfin/logs/files", authMiddleware, (req, res, next) => {
     try {
-      const dir = resolveFfmpegLogDir();
+      const dir = resolveJellyfinLogDir();
       if (!fs.existsSync(dir)) {
         return res.status(404).json({
-          error: `FFmpeg log directory not found: ${dir}`,
+          error: `Jellyfin log directory not found: ${dir}`,
           directory: dir,
           files: []
         });
@@ -472,7 +472,7 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
             mtime: stat.mtime.toISOString()
           };
         })
-        .filter((f) => /(ffmpeg|transcode|jellyfin)/i.test(f.name))
+        .filter((f) => /\.log$/i.test(f.name) || /(jellyfin|transcode)/i.test(f.name))
         .sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime())
         .slice(0, 200);
 
@@ -482,9 +482,9 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot, log
     }
   });
 
-  router.get("/admin/jellyfin/ffmpeg/read", authMiddleware, (req, res, next) => {
+  router.get("/admin/jellyfin/logs/read", authMiddleware, (req, res, next) => {
     try {
-      const dir = resolveFfmpegLogDir();
+      const dir = resolveJellyfinLogDir();
       const file = String(req.query.file || "").trim();
       const lines = Math.min(Math.max(Number(req.query.lines) || 400, 20), 5000);
 

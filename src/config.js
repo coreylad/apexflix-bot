@@ -62,7 +62,7 @@ function refreshConfigFromProcess() {
   config.jellyfin.deviceId = optional("JELLYFIN_DEVICE_ID", "apexflix-bot");
   config.jellyfin.clientVersion = optional("JELLYFIN_CLIENT_VERSION", "1.0.0");
   config.jellyfin.allowInsecureTls = optionalBoolean("JELLYFIN_ALLOW_INSECURE_TLS", false);
-  config.jellyfin.ffmpegLogDir = optional("JELLYFIN_FFMPEG_LOG_DIR", "/var/log/jellyfin");
+  config.jellyfin.logDir = optional("JELLYFIN_LOG_DIR", optional("JELLYFIN_FFMPEG_LOG_DIR", "/var/log/jellyfin"));
 
   config.app.port = optionalNumber("PORT", 1337);
   config.app.requestStatusPollSeconds = optionalNumber("REQUEST_STATUS_POLL_SECONDS", 60);

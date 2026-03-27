@@ -71,6 +71,11 @@ function renderEnvForm(targetId, allowedKeys, values) {
         "JELLYFIN_BASE_URL",
         "JELLYFIN_API_KEY",
         "JELLYFIN_USER_ID",
+        "JELLYFIN_USERNAME",
+        "JELLYFIN_CLIENT_NAME",
+        "JELLYFIN_DEVICE_NAME",
+        "JELLYFIN_DEVICE_ID",
+        "JELLYFIN_CLIENT_VERSION",
         "JELLYFIN_ALLOW_INSECURE_TLS"
       ]
     },

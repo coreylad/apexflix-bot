@@ -72,6 +72,11 @@ OVERSEERR_DEFAULT_USER_ID
 JELLYFIN_URL
 JELLYFIN_API_KEY
 JELLYFIN_USER_ID
+JELLYFIN_USERNAME
+JELLYFIN_CLIENT_NAME
+JELLYFIN_DEVICE_NAME
+JELLYFIN_DEVICE_ID
+JELLYFIN_CLIENT_VERSION
 PORT
 REQUEST_STATUS_POLL_SECONDS
 LOG_LEVEL
@@ -358,8 +363,21 @@ If the web UI loads but Discord features do not work:
 - Restart the service after changing Discord settings.
 
 If Jellyfin latest items fail:
-- Confirm base URL, API key, and user ID.
+- Confirm URL, API key, and user identity config.
 - Confirm the target user can access the library you expect.
+
+Recommended Jellyfin values:
+
+```text
+JELLYFIN_URL=https://apexflix.xyz/coreylad/jellyfin
+JELLYFIN_API_KEY=<your key>
+JELLYFIN_USER_ID=<preferred if known>
+JELLYFIN_USERNAME=<optional fallback>
+JELLYFIN_CLIENT_NAME=ApexFlix
+JELLYFIN_DEVICE_NAME=ApexFlix Bot
+JELLYFIN_DEVICE_ID=apexflix-bot
+JELLYFIN_CLIENT_VERSION=1.0.0
+```
 
 If Overseerr search/request fails:
 - Confirm the API key and base URL.

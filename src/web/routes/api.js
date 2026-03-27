@@ -217,7 +217,7 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
       const items = await jellyfin.getLatestItems(limit);
       res.json({ count: items.length, items });
     } catch (error) {
-      next(error);
+      next(new Error(`Jellyfin latest failed: ${error.message}`));
     }
   });
 

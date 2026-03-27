@@ -56,6 +56,11 @@ function refreshConfigFromProcess() {
   config.jellyfin.url = firstDefined(["JELLYFIN_URL", "JELLYFIN_BASE_URL"]).replace(/\/$/, "");
   config.jellyfin.apiKey = optional("JELLYFIN_API_KEY");
   config.jellyfin.userId = optional("JELLYFIN_USER_ID");
+  config.jellyfin.username = optional("JELLYFIN_USERNAME");
+  config.jellyfin.clientName = optional("JELLYFIN_CLIENT_NAME", "ApexFlix");
+  config.jellyfin.deviceName = optional("JELLYFIN_DEVICE_NAME", "ApexFlix Bot");
+  config.jellyfin.deviceId = optional("JELLYFIN_DEVICE_ID", "apexflix-bot");
+  config.jellyfin.clientVersion = optional("JELLYFIN_CLIENT_VERSION", "1.0.0");
   config.jellyfin.allowInsecureTls = optionalBoolean("JELLYFIN_ALLOW_INSECURE_TLS", false);
 
   config.app.port = optionalNumber("PORT", 1337);

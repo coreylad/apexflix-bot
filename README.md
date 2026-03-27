@@ -95,6 +95,17 @@ Key settings:
 - `OVERSEERR_ALLOW_INSECURE_TLS=true` only if your proxy uses self-signed TLS
 - `JELLYFIN_ALLOW_INSECURE_TLS=true` only if your proxy uses self-signed TLS
 
+Jellyfin advanced options:
+- `JELLYFIN_USER_ID`: explicit Jellyfin user ID (recommended for stable behavior)
+- `JELLYFIN_USERNAME`: optional fallback if user ID is not set
+- `JELLYFIN_CLIENT_NAME`, `JELLYFIN_DEVICE_NAME`, `JELLYFIN_DEVICE_ID`, `JELLYFIN_CLIENT_VERSION`: client metadata used in Jellyfin authorization header
+
+If `/api/jellyfin/latest` fails with HTTP 400:
+1. Confirm `JELLYFIN_URL` includes full scheme and path (for example `https://apexflix.xyz/coreylad/jellyfin`)
+2. Confirm API key is valid for your Jellyfin server
+3. Set `JELLYFIN_USER_ID` explicitly (preferred) or `JELLYFIN_USERNAME`
+4. If proxy TLS is self-signed, set `JELLYFIN_ALLOW_INSECURE_TLS=true`
+
 Legacy compatibility:
 - `OVERSEERR_BASE_URL` and `JELLYFIN_BASE_URL` are still accepted, but `OVERSEERR_URL` and `JELLYFIN_URL` are preferred.
 

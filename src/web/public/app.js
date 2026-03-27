@@ -73,6 +73,31 @@ function issueStatusBadge(code) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
+const LIDARR_MONITOR_OPTIONS = [
+  ["all", "All"],
+  ["future", "Future"],
+  ["missing", "Missing"],
+  ["existing", "Existing"],
+  ["first", "First"],
+  ["latest", "Latest"],
+  ["none", "None"]
+];
+
+const LIDARR_MONITOR_NEW_ITEMS_OPTIONS = [
+  ["all", "All"],
+  ["new", "New Only"],
+  ["none", "None"]
+];
+
+const BOOLEAN_OPTIONS = [
+  ["true", "True"],
+  ["false", "False"]
+];
+
+let envAllowedKeysCache = [];
+let envValuesCache = {};
+let lidarrEnvOptionsCache = null;
+
 /*  env form renderer  */
 function renderEnvForm(targetId, allowedKeys, values) {
   const form = document.getElementById(targetId);
@@ -134,31 +159,90 @@ function renderEnvForm(targetId, allowedKeys, values) {
 
   const allowedSet = new Set(allowedKeys || []);
 
+  function renderSelectField(key, label, value, options) {
+    const renderedOptions = (options || [])
+      .map(([optionValue, optionLabel]) => {
+        const selected = String(optionValue) === String(value ?? "") ? " selected" : "";
+        return `<option value="${escapeHtml(optionValue)}"${selected}>${escapeHtml(optionLabel)}</option>`;
+      })
+      .join("");
+    return `<label>${label}<select name="${key}">${renderedOptions}</select></label>`;
+  }
+
+  function renderEnvField(key, rawValue) {
+    const safeVal = escapeHtml(rawValue || "");
+    const label = key.endsWith("BASE_URL") ? `${key} (legacy)` : key;
+    const lidarrOptions = targetId === "envForm" ? lidarrEnvOptionsCache : null;
+
+    if (targetId === "envForm") {
+      if (key === "LIDARR_ALLOW_INSECURE_TLS" || key === "LIDARR_MONITORED" || key === "LIDARR_SEARCH_FOR_MISSING_ALBUMS") {
+        return renderSelectField(key, label, String(rawValue || "false"), BOOLEAN_OPTIONS);
+      }
+
+      if (key === "LIDARR_MONITOR") {
+        return renderSelectField(key, label, String(rawValue || "all"), LIDARR_MONITOR_OPTIONS);
+      }
+
+      if (key === "LIDARR_MONITOR_NEW_ITEMS") {
+        return renderSelectField(key, label, String(rawValue || "all"), LIDARR_MONITOR_NEW_ITEMS_OPTIONS);
+      }
+
+      if (lidarrOptions?.rootFolders?.length && key === "LIDARR_ROOT_FOLDER") {
+        return renderSelectField(
+          key,
+          label,
+          rawValue,
+          lidarrOptions.rootFolders.map((item) => [item.path, item.name ? `${item.name} (${item.path})` : item.path])
+        );
+      }
+
+      if (lidarrOptions?.qualityProfiles?.length && key === "LIDARR_QUALITY_PROFILE_ID") {
+        return renderSelectField(
+          key,
+          label,
+          String(rawValue || ""),
+          lidarrOptions.qualityProfiles.map((item) => [String(item.id), item.name])
+        );
+      }
+
+      if (lidarrOptions?.metadataProfiles?.length && key === "LIDARR_METADATA_PROFILE_ID") {
+        return renderSelectField(
+          key,
+          label,
+          String(rawValue || ""),
+          lidarrOptions.metadataProfiles.map((item) => [String(item.id), item.name])
+        );
+      }
+    }
+
+    return `<label>${label}<input name="${key}" type="text" value="${safeVal}" /></label>`;
+  }
+
   form.innerHTML = groups
     .map((group) => {
       const keys = group.keys.filter((k) => allowedSet.has(k));
       if (!keys.length) return "";
       const fields = keys
-        .map((key) => {
-          const safeVal = escapeHtml(values?.[key] || "");
-          const label = key.endsWith("BASE_URL") ? `${key} (legacy)` : key;
-          return `<label>${label}<input name="${key}" type="text" value="${safeVal}" /></label>`;
-        })
+        .map((key) => renderEnvField(key, values?.[key] || ""))
         .join("");
       const lidarrActions =
         targetId === "envForm" && group.title === "Lidarr"
-          ? `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testLidarrEnvBtn">Test Lidarr Connection</button></div>`
+          ? `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testLidarrEnvBtn">Test Lidarr Connection</button><div id="testLidarrEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`
           : "";
       return `<div class="settings-section"><div class="settings-title">${group.title}</div><div class="settings-grid">${fields}</div>${lidarrActions}</div>`;
     })
     .join("");
 }
 
-function wireDynamicEnvButtons() {
-  const lidarrTestBtn = document.getElementById("testLidarrEnvBtn");
-  if (lidarrTestBtn && !lidarrTestBtn.dataset.wired) {
-    lidarrTestBtn.dataset.wired = "1";
-    lidarrTestBtn.addEventListener("click", testLidarrEnvConnection);
+function setLidarrTestButtonState({ busy = false, text = "", type = "info" } = {}) {
+  const button = document.getElementById("testLidarrEnvBtn");
+  const status = document.getElementById("testLidarrEnvStatus");
+  if (button) {
+    button.disabled = busy;
+    button.textContent = busy ? "Testing..." : "Test Lidarr Connection";
+  }
+  if (status) {
+    setMsg("testLidarrEnvStatus", text, type);
   }
 }
 
@@ -882,8 +966,9 @@ async function sendManualChannelTest(target) {
 async function loadEnvSettings() {
   try {
     const data = await fetchJson("api/admin/env");
+    envAllowedKeysCache = data.allowedKeys || [];
+    envValuesCache = { ...(data.values || {}) };
     renderEnvForm("envForm", data.allowedKeys, data.values);
-    wireDynamicEnvButtons();
   } catch (err) {
     setMsg("envMsg", `Failed to load: ${err.message}`, "err");
   }
@@ -897,6 +982,7 @@ async function saveEnvSettings() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ values })
     });
+    envValuesCache = { ...(data.values || values) };
     setMsg("envMsg", data.message || "Environment saved.", "ok");
   } catch (err) {
     setMsg("envMsg", err.message, "err");
@@ -905,17 +991,34 @@ async function saveEnvSettings() {
 
 async function testLidarrEnvConnection() {
   const values = collectFormValues("envForm");
-  setMsg("envMsg", "Testing Lidarr connection", "info");
+  setLidarrTestButtonState({ busy: true, text: "Testing Lidarr connection...", type: "info" });
+  setMsg("envMsg", "", "info");
   try {
     const data = await fetchJson("api/admin/lidarr/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ values })
     });
+    lidarrEnvOptionsCache = {
+      rootFolders: data.rootFolders || [],
+      qualityProfiles: data.qualityProfiles || [],
+      metadataProfiles: data.metadataProfiles || []
+    };
+    const mergedValues = {
+      ...envValuesCache,
+      ...values,
+      LIDARR_ROOT_FOLDER: values.LIDARR_ROOT_FOLDER || data.defaults?.rootFolderPath || envValuesCache.LIDARR_ROOT_FOLDER || "",
+      LIDARR_QUALITY_PROFILE_ID:
+        values.LIDARR_QUALITY_PROFILE_ID || String(data.defaults?.qualityProfileId || envValuesCache.LIDARR_QUALITY_PROFILE_ID || ""),
+      LIDARR_METADATA_PROFILE_ID:
+        values.LIDARR_METADATA_PROFILE_ID || String(data.defaults?.metadataProfileId || envValuesCache.LIDARR_METADATA_PROFILE_ID || "")
+    };
+    envValuesCache = mergedValues;
+    renderEnvForm("envForm", envAllowedKeysCache, mergedValues);
     applyLidarrOptions(data);
-    setMsg("envMsg", data.message || "Connected to Lidarr.", "ok");
+    setLidarrTestButtonState({ busy: false, text: data.message || "Connected to Lidarr.", type: "ok" });
   } catch (err) {
-    setMsg("envMsg", err.message, "err");
+    setLidarrTestButtonState({ busy: false, text: err.message, type: "err" });
   }
 }
 
@@ -1252,6 +1355,12 @@ function wireAll(user) {
 
   // Environment
   document.getElementById("saveEnvBtn")?.addEventListener("click", saveEnvSettings);
+  document.getElementById("envForm")?.addEventListener("click", (e) => {
+    const button = e.target.closest("#testLidarrEnvBtn");
+    if (!button) return;
+    e.preventDefault();
+    testLidarrEnvConnection();
+  });
 
   // System
   bindButtonClick("healthRefreshBtn", loadHealth);

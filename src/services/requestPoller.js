@@ -81,13 +81,29 @@ async function enrichRequestDataFromDetails(normalized, requestId, overseerr) {
       "Unknown title"
     );
 
-    return {
+    let merged = {
       ...normalized,
       mediaType: detailedType,
       mediaId: detailedMediaId,
       title: detailedTitle,
       requestedBy: details.requestedBy?.id || normalized.requestedBy
     };
+
+    if (merged.title === "Unknown title" && merged.mediaId > 0) {
+      const fallback = await overseerr.getMediaByTmdbId(merged.mediaId, merged.mediaType);
+      if (fallback) {
+        merged = {
+          ...merged,
+          title: firstNonEmpty([fallback.title, merged.title], "Unknown title"),
+          mediaType:
+            fallback.mediaType === "movie" || fallback.mediaType === "tv"
+              ? fallback.mediaType
+              : merged.mediaType
+        };
+      }
+    }
+
+    return merged;
   } catch (error) {
     return normalized;
   }

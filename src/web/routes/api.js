@@ -60,6 +60,21 @@ function normalizeBotConfig(input) {
   };
 }
 
+function firstNonEmpty(values, fallback = "") {
+  for (const value of values) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    const normalized = String(value).trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return fallback;
+}
+
 function parseCookies(cookieHeader) {
   const result = {};
   const raw = cookieHeader || "";
@@ -283,17 +298,25 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
           }
 
           const media = details.media || details.request?.media || {};
-          const title =
+          let title =
             media.title ||
             media.name ||
             details.subject ||
             details.title ||
             "Unknown title";
 
-          const mediaType =
+          let mediaType =
             String(details.type || media.mediaType || media.type || "unknown").toLowerCase();
           const mediaId = Number(media.tmdbId || media.id || details.mediaId || 0);
           const status = Number(details.status || 0);
+
+          if (title === "Unknown title" && mediaId > 0) {
+            const fallback = await overseerr.getMediaByTmdbId(mediaId, mediaType);
+            if (fallback) {
+              title = firstNonEmpty([fallback.title, title], "Unknown title");
+              mediaType = firstNonEmpty([fallback.mediaType, mediaType], "unknown").toLowerCase();
+            }
+          }
 
           db.upsertRequestEvent({
             requestId: details.id || requestId,

@@ -335,6 +335,50 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     return { mode: "invalid", input: rawValue };
   }
 
+  function firstNonEmpty(values, fallback = "") {
+    for (const value of values) {
+      if (value === undefined || value === null) {
+        continue;
+      }
+
+      const normalized = String(value).trim();
+      if (normalized) {
+        return normalized;
+      }
+    }
+
+    return fallback;
+  }
+
+  async function resolveRequestTitleFromDetails(request) {
+    const media = request?.media || {};
+    let title = firstNonEmpty(
+      [
+        media.title,
+        media.name,
+        media.originalTitle,
+        request?.subject,
+        request?.title,
+        request?.message
+      ],
+      "Unknown title"
+    );
+
+    if (title !== "Unknown title") {
+      return title;
+    }
+
+    const mediaId = Number(media.tmdbId || media.id || request?.mediaId || 0);
+    const mediaType = String(request?.type || media.mediaType || media.type || "").toLowerCase();
+
+    if (mediaId > 0) {
+      const fallback = await overseerr.getMediaByTmdbId(mediaId, mediaType);
+      title = firstNonEmpty([fallback?.title, title], "Unknown title");
+    }
+
+    return title;
+  }
+
   async function handleRequestHelp(interaction) {
     const helpText = [
       "How to use /request",
@@ -564,7 +608,7 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     const requestId = interaction.options.getInteger("request_id", true);
     const request = await overseerr.getRequestById(requestId);
 
-    const title = request.media?.title || request.media?.name || "Unknown title";
+    const title = await resolveRequestTitleFromDetails(request);
     const statusText = overseerr.getRequestStatusText(request.status);
 
     db.upsertRequestEvent({

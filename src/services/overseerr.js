@@ -147,6 +147,34 @@ function createOverseerrClient(config) {
     }
   }
 
+  function extractMediaSnapshot(node) {
+    if (!node || typeof node !== "object") {
+      return null;
+    }
+
+    const media = node.media && typeof node.media === "object" ? node.media : node;
+    const title =
+      media.title ||
+      media.name ||
+      media.originalTitle ||
+      node.subject ||
+      node.title ||
+      "";
+    const mediaType = String(media.mediaType || media.type || node.mediaType || node.type || "").toLowerCase();
+    const tmdbId = Number(media.tmdbId || media.id || node.tmdbId || node.id || 0);
+
+    if (!title && !tmdbId) {
+      return null;
+    }
+
+    return {
+      title: String(title || "").trim(),
+      mediaType: mediaType === "movie" || mediaType === "tv" ? mediaType : "unknown",
+      mediaId: tmdbId > 0 ? tmdbId : 0,
+      posterPath: media.posterPath || media.poster || ""
+    };
+  }
+
   return {
     getRequestStatusText: (status) => REQUEST_STATUS[status] || `Unknown (${status})`,
     searchMedia: async (query, mediaType = "all") => {
@@ -262,6 +290,45 @@ function createOverseerrClient(config) {
       }
 
       return Array.from(seasonSet).sort((a, b) => a - b);
+    },
+    getMediaByTmdbId: async (mediaId, mediaTypeHint = "") => {
+      const client = getClient();
+      const id = Number(mediaId);
+      if (!Number.isInteger(id) || id <= 0) {
+        return null;
+      }
+
+      const hint = String(mediaTypeHint || "").toLowerCase();
+      const preferred = hint === "movie" || hint === "tv" ? [hint] : [];
+      const remaining = ["movie", "tv"].filter((kind) => !preferred.includes(kind));
+      const kindOrder = preferred.concat(remaining);
+
+      for (const kind of kindOrder) {
+        try {
+          const response = await client.get(buildEndpoint(`api/v1/${kind}/${id}`));
+          const snapshot = extractMediaSnapshot(response?.data);
+          if (snapshot?.title || snapshot?.mediaId) {
+            return {
+              ...snapshot,
+              mediaType: kind
+            };
+          }
+        } catch (error) {
+          // Try next endpoint; route availability differs between Seerr builds.
+        }
+      }
+
+      try {
+        const response = await client.get(buildEndpoint(`api/v1/media/${id}`));
+        const snapshot = extractMediaSnapshot(response?.data);
+        if (snapshot?.title || snapshot?.mediaId) {
+          return snapshot;
+        }
+      } catch (error) {
+        // No generic media endpoint available or media not found.
+      }
+
+      return null;
     },
     findUserByUsername: async (username) => {
       const client = getClient();

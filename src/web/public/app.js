@@ -220,7 +220,9 @@ async function loadBotConfig() {
     "requestsChannelId",
     "uploadsChannelId",
     "updatesChannelId",
+    "newsChannelId",
     "requestRoleId",
+    "dailyNewsHourLocal",
     "requestAnnouncementTemplate",
     "availableAnnouncementTemplate",
     "statusAnnouncementTemplate"
@@ -231,6 +233,7 @@ async function loadBotConfig() {
     "announceOnRequestCreated",
     "announceOnAvailable",
     "announceOnAnyStatus",
+    "dailyNewsEnabled",
     "dmOnStatusChange",
     "mentionRequesterInChannel",
     "useRichEmbeds"
@@ -259,7 +262,9 @@ async function saveBotConfig() {
     "requestsChannelId",
     "uploadsChannelId",
     "updatesChannelId",
+    "newsChannelId",
     "requestRoleId",
+    "dailyNewsHourLocal",
     "requestAnnouncementTemplate",
     "availableAnnouncementTemplate",
     "statusAnnouncementTemplate"
@@ -270,6 +275,7 @@ async function saveBotConfig() {
     "announceOnRequestCreated",
     "announceOnAvailable",
     "announceOnAnyStatus",
+    "dailyNewsEnabled",
     "dmOnStatusChange",
     "mentionRequesterInChannel",
     "useRichEmbeds"
@@ -305,6 +311,14 @@ async function backfillRequests() {
   await loadRequests();
 }
 
+async function sendDailyNewsNow() {
+  const response = await fetchJson("api/admin/news/send", {
+    method: "POST"
+  });
+
+  setMessage("dailyNewsResult", response.message || "Daily news report sent.");
+}
+
 async function checkSession() {
   try {
     const me = await fetchJson("api/auth/me");
@@ -337,6 +351,7 @@ function wireAuth() {
   const logoutBtn = document.getElementById("logoutBtn");
   const saveEnvBtn = document.getElementById("saveEnvBtn");
   const saveBotConfigBtn = document.getElementById("saveBotConfigBtn");
+  const sendDailyNewsBtn = document.getElementById("sendDailyNewsBtn");
   const backfillRequestsBtn = document.getElementById("backfillRequestsBtn");
   const passwordForm = document.getElementById("passwordForm");
 
@@ -427,6 +442,14 @@ function wireAuth() {
       await saveBotConfig();
     } catch (error) {
       setMessage("botConfigResult", error.message, true);
+    }
+  });
+
+  sendDailyNewsBtn.addEventListener("click", async () => {
+    try {
+      await sendDailyNewsNow();
+    } catch (error) {
+      setMessage("dailyNewsResult", error.message, true);
     }
   });
 

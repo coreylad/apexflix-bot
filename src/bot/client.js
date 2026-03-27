@@ -13,11 +13,14 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     requestsChannelId: "",
     uploadsChannelId: "",
     updatesChannelId: "",
+    newsChannelId: "",
     requestRoleId: "",
     enforceRequestChannel: false,
     announceOnRequestCreated: true,
     announceOnAvailable: true,
     announceOnAnyStatus: false,
+    dailyNewsEnabled: true,
+    dailyNewsHourLocal: "9",
     dmOnStatusChange: true,
     mentionRequesterInChannel: true,
     useRichEmbeds: true,
@@ -30,6 +33,8 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
   };
 
   let online = false;
+  let dailyNewsTimer = null;
+  let lastDailyNewsDate = "";
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -67,11 +72,14 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
       requestsChannelId: normalizeId(stored.requestsChannelId || DEFAULT_BOT_CONFIG.requestsChannelId),
       uploadsChannelId: normalizeId(stored.uploadsChannelId || DEFAULT_BOT_CONFIG.uploadsChannelId),
       updatesChannelId: normalizeId(stored.updatesChannelId || DEFAULT_BOT_CONFIG.updatesChannelId),
+      newsChannelId: normalizeId(stored.newsChannelId || DEFAULT_BOT_CONFIG.newsChannelId),
       requestRoleId: normalizeId(stored.requestRoleId || DEFAULT_BOT_CONFIG.requestRoleId),
       enforceRequestChannel: asBoolean(stored.enforceRequestChannel, DEFAULT_BOT_CONFIG.enforceRequestChannel),
       announceOnRequestCreated: asBoolean(stored.announceOnRequestCreated, DEFAULT_BOT_CONFIG.announceOnRequestCreated),
       announceOnAvailable: asBoolean(stored.announceOnAvailable, DEFAULT_BOT_CONFIG.announceOnAvailable),
       announceOnAnyStatus: asBoolean(stored.announceOnAnyStatus, DEFAULT_BOT_CONFIG.announceOnAnyStatus),
+      dailyNewsEnabled: asBoolean(stored.dailyNewsEnabled, DEFAULT_BOT_CONFIG.dailyNewsEnabled),
+      dailyNewsHourLocal: String(stored.dailyNewsHourLocal || DEFAULT_BOT_CONFIG.dailyNewsHourLocal),
       dmOnStatusChange: asBoolean(stored.dmOnStatusChange, DEFAULT_BOT_CONFIG.dmOnStatusChange),
       mentionRequesterInChannel: asBoolean(stored.mentionRequesterInChannel, DEFAULT_BOT_CONFIG.mentionRequesterInChannel),
       useRichEmbeds: asBoolean(stored.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds),
@@ -404,6 +412,232 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
     }
 
     return fallback;
+  }
+
+  function parseHour(value, fallback = 9) {
+    const parsed = Number(String(value || "").trim());
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 23) {
+      return fallback;
+    }
+    return parsed;
+  }
+
+  function dateKeyLocal(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  async function resolveNewsChannelId(cfg) {
+    if (cfg.newsChannelId) {
+      return cfg.newsChannelId;
+    }
+
+    if (!config.discord.guildId) {
+      return "";
+    }
+
+    try {
+      const guild = await client.guilds.fetch(config.discord.guildId);
+      const channels = await guild.channels.fetch();
+      const candidates = channels
+        .filter((ch) => ch && ch.isTextBased && ch.isTextBased())
+        .map((ch) => ({ id: ch.id, name: String(ch.name || "").toLowerCase() }));
+
+      const exact = candidates.find((ch) => ch.name === "news");
+      if (exact?.id) {
+        return exact.id;
+      }
+
+      const contains = candidates.find((ch) => ch.name.includes("news"));
+      return contains?.id || "";
+    } catch (error) {
+      logger.warn(`Failed to auto-resolve news channel: ${error.message}`);
+      return "";
+    }
+  }
+
+  async function getRecentlyAvailableRequests(limit = 5) {
+    const rows = await overseerr.getRecentRequests(80);
+    const output = [];
+    const seen = new Set();
+
+    for (const row of rows) {
+      const snapshot = overseerr.resolveStatusSnapshot(row);
+      if (Number(snapshot.status) !== 4) {
+        continue;
+      }
+
+      const media = row.media || {};
+      const mediaType = String(row.type || media.mediaType || media.type || "unknown").toLowerCase();
+      const mediaId = Number(media.tmdbId || media.id || row.mediaId || 0);
+      const title = firstNonEmpty(
+        [
+          media.title,
+          media.name,
+          row.subject,
+          row.title,
+          media.originalTitle
+        ],
+        `Request #${row.id || "unknown"}`
+      );
+
+      const key = `${mediaType}:${mediaId > 0 ? mediaId : title.toLowerCase()}`;
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      output.push({
+        title,
+        mediaType,
+        mediaId,
+        requestId: row.id,
+        image: media.posterPath || media.poster || ""
+      });
+
+      if (output.length >= limit) {
+        break;
+      }
+    }
+
+    return output;
+  }
+
+  async function sendDailyNewsReport({ forced = false } = {}) {
+    if (!online) {
+      return { ok: false, message: "Discord bot is not online." };
+    }
+
+    const cfg = getBotConfig();
+    if (!forced && !cfg.dailyNewsEnabled) {
+      return { ok: false, message: "Daily news is disabled in bot config." };
+    }
+
+    const channelId = await resolveNewsChannelId(cfg);
+    if (!channelId) {
+      return { ok: false, message: "No news channel found. Set News Channel ID or create #news." };
+    }
+
+    let available = [];
+    let usage = {
+      movieCount: 0,
+      seriesCount: 0,
+      episodeCount: 0,
+      songCount: 0,
+      playedItemsCount: 0,
+      activeSessions: 0
+    };
+
+    try {
+      available = await getRecentlyAvailableRequests(6);
+    } catch (error) {
+      logger.warn(`Daily news available-items fetch failed: ${error.message}`);
+    }
+
+    try {
+      usage = await jellyfin.getUsageStats();
+    } catch (error) {
+      logger.warn(`Daily news Jellyfin stats fetch failed: ${error.message}`);
+    }
+
+    let imageUrl = "";
+    if (available[0]) {
+      imageUrl = await resolveAnnouncementImageUrl({
+        image: available[0].image,
+        mediaId: available[0].mediaId,
+        mediaType: available[0].mediaType
+      });
+    }
+
+    const availableText =
+      available.length > 0
+        ? available
+            .map((item) => `• ${item.title} (${item.mediaType || "unknown"})`)
+            .join("\n")
+        : "No newly available items were detected in recent Seerr activity.";
+
+    const summaryText = [
+      "Privacy-safe aggregate stats (no usernames, IPs, or session identities):",
+      `• Movies in library: ${usage.movieCount}`,
+      `• Series in library: ${usage.seriesCount}`,
+      `• Episodes in library: ${usage.episodeCount}`,
+      `• Songs in library: ${usage.songCount}`,
+      `• Played items total: ${usage.playedItemsCount}`,
+      `• Active streams now: ${usage.activeSessions}`
+    ].join("\n");
+
+    const payload = buildAnnouncementPayload({
+      title: "Daily Media News Report",
+      description: `Daily digest for ${new Date().toLocaleDateString()}`,
+      color: 0x39b96e,
+      imageUrl,
+      fields: [
+        {
+          name: "Recently Available (Seerr)",
+          value: availableText.slice(0, 1024) || "No data",
+          inline: false
+        },
+        {
+          name: "Jellyfin Overview",
+          value: summaryText.slice(0, 1024),
+          inline: false
+        }
+      ]
+    });
+
+    await sendToChannel(channelId, payload);
+
+    return {
+      ok: true,
+      channelId,
+      availableCount: available.length,
+      usage
+    };
+  }
+
+  async function runDailyNewsTick() {
+    if (!online) {
+      return;
+    }
+
+    const cfg = getBotConfig();
+    if (!cfg.dailyNewsEnabled) {
+      return;
+    }
+
+    const now = new Date();
+    const hour = parseHour(cfg.dailyNewsHourLocal, 9);
+    const today = dateKeyLocal(now);
+
+    if (now.getHours() < hour || lastDailyNewsDate === today) {
+      return;
+    }
+
+    const result = await sendDailyNewsReport({ forced: false });
+    if (result.ok) {
+      lastDailyNewsDate = today;
+      logger.info(`Daily news report sent to channel ${result.channelId}`);
+    }
+  }
+
+  function startDailyNewsScheduler() {
+    if (dailyNewsTimer) {
+      return;
+    }
+
+    runDailyNewsTick().catch((error) => {
+      logger.warn(`Initial daily news tick failed: ${error.message}`);
+    });
+
+    dailyNewsTimer = setInterval(() => {
+      runDailyNewsTick().catch((error) => {
+        logger.warn(`Daily news tick failed: ${error.message}`);
+      });
+    }, 5 * 60 * 1000);
+
+    logger.info("Daily news scheduler started");
   }
 
   async function resolveRequestTitleFromDetails(request) {
@@ -775,9 +1009,11 @@ function createDiscordBot({ config, logger, db, overseerr, jellyfin }) {
 
       await client.login(config.discord.token);
       online = true;
+      startDailyNewsScheduler();
     },
     notifyDiscordUser,
     announceRequestStatusChange,
+    sendDailyNewsReport,
     getClient: () => client
   };
 }

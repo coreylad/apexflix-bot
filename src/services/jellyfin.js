@@ -155,6 +155,54 @@ function createJellyfinClient(config) {
         premiereDate: item.PremiereDate,
         productionYear: item.ProductionYear
       }));
+    },
+    getUsageStats: async () => {
+      const client = getClient();
+      const userId = await resolveUserId(client);
+      const stats = {
+        movieCount: 0,
+        seriesCount: 0,
+        episodeCount: 0,
+        songCount: 0,
+        playedItemsCount: 0,
+        activeSessions: 0
+      };
+
+      try {
+        const countsResponse = await client.get(buildEndpoint("Items/Counts"));
+        const counts = countsResponse?.data || {};
+        stats.movieCount = Number(counts.MovieCount || 0);
+        stats.seriesCount = Number(counts.SeriesCount || 0);
+        stats.episodeCount = Number(counts.EpisodeCount || 0);
+        stats.songCount = Number(counts.SongCount || 0);
+      } catch (error) {
+        // Keep defaults when endpoint is unavailable on a specific Jellyfin setup.
+      }
+
+      try {
+        const playedResponse = await client.get(buildEndpoint(`Users/${userId}/Items`), {
+          params: {
+            Recursive: true,
+            Limit: 1,
+            Filters: "IsPlayed",
+            IncludeItemTypes: "Movie,Episode"
+          }
+        });
+
+        stats.playedItemsCount = Number(playedResponse?.data?.TotalRecordCount || 0);
+      } catch (error) {
+        // Keep defaults when played-items aggregate is unavailable.
+      }
+
+      try {
+        const sessionsResponse = await client.get(buildEndpoint("Sessions"));
+        const sessions = Array.isArray(sessionsResponse?.data) ? sessionsResponse.data : [];
+        stats.activeSessions = sessions.length;
+      } catch (error) {
+        // Keep defaults when session endpoint is unavailable.
+      }
+
+      return stats;
     }
   };
 }

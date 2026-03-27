@@ -13,7 +13,7 @@ function normalizeBasePath(raw) {
   return withLeadingSlash.replace(/\/+$/, "");
 }
 
-function createWebServer({ config, logger, db, overseerr, jellyfin, envManager }) {
+function createWebServer({ config, logger, db, overseerr, jellyfin, envManager, bot }) {
   const app = express();
   const basePath = normalizeBasePath(config.app.basePath);
 
@@ -39,7 +39,8 @@ function createWebServer({ config, logger, db, overseerr, jellyfin, envManager }
       overseerr,
       jellyfin,
       config,
-      envManager
+      envManager,
+      bot
     })
   );
 

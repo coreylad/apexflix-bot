@@ -30,7 +30,8 @@ async function bootstrap() {
     db,
     overseerr,
     jellyfin,
-    envManager
+    envManager,
+    bot
   });
 
   const poller = createRequestPoller({

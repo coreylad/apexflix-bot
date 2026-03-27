@@ -5,11 +5,14 @@ const DEFAULT_BOT_CONFIG = {
   requestsChannelId: "",
   uploadsChannelId: "",
   updatesChannelId: "",
+  newsChannelId: "",
   requestRoleId: "",
   enforceRequestChannel: "false",
   announceOnRequestCreated: "true",
   announceOnAvailable: "true",
   announceOnAnyStatus: "false",
+  dailyNewsEnabled: "true",
+  dailyNewsHourLocal: "9",
   dmOnStatusChange: "true",
   mentionRequesterInChannel: "true",
   useRichEmbeds: "true",
@@ -39,15 +42,24 @@ function normalizeId(value) {
 
 function normalizeBotConfig(input) {
   const source = input || {};
+  const rawHour = Number(String(source.dailyNewsHourLocal ?? DEFAULT_BOT_CONFIG.dailyNewsHourLocal).trim());
+  const newsHour =
+    Number.isInteger(rawHour) && rawHour >= 0 && rawHour <= 23
+      ? String(rawHour)
+      : DEFAULT_BOT_CONFIG.dailyNewsHourLocal;
+
   return {
     requestsChannelId: normalizeId(source.requestsChannelId),
     uploadsChannelId: normalizeId(source.uploadsChannelId),
     updatesChannelId: normalizeId(source.updatesChannelId),
+    newsChannelId: normalizeId(source.newsChannelId),
     requestRoleId: normalizeId(source.requestRoleId),
     enforceRequestChannel: asBoolString(source.enforceRequestChannel, DEFAULT_BOT_CONFIG.enforceRequestChannel),
     announceOnRequestCreated: asBoolString(source.announceOnRequestCreated, DEFAULT_BOT_CONFIG.announceOnRequestCreated),
     announceOnAvailable: asBoolString(source.announceOnAvailable, DEFAULT_BOT_CONFIG.announceOnAvailable),
     announceOnAnyStatus: asBoolString(source.announceOnAnyStatus, DEFAULT_BOT_CONFIG.announceOnAnyStatus),
+    dailyNewsEnabled: asBoolString(source.dailyNewsEnabled, DEFAULT_BOT_CONFIG.dailyNewsEnabled),
+    dailyNewsHourLocal: newsHour,
     dmOnStatusChange: asBoolString(source.dmOnStatusChange, DEFAULT_BOT_CONFIG.dmOnStatusChange),
     mentionRequesterInChannel: asBoolString(source.mentionRequesterInChannel, DEFAULT_BOT_CONFIG.mentionRequesterInChannel),
     useRichEmbeds: asBoolString(source.useRichEmbeds, DEFAULT_BOT_CONFIG.useRichEmbeds),
@@ -122,7 +134,7 @@ function requireAuth(db) {
   };
 }
 
-function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
+function createApiRouter({ db, overseerr, jellyfin, config, envManager, bot }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
 
@@ -281,6 +293,30 @@ function createApiRouter({ db, overseerr, jellyfin, config, envManager }) {
       message: "Discord bot configuration saved.",
       values: normalized
     });
+  });
+
+  router.post("/admin/news/send", authMiddleware, async (req, res, next) => {
+    try {
+      if (!bot || typeof bot.sendDailyNewsReport !== "function") {
+        return res.status(503).json({ error: "Discord bot is not ready for daily news dispatch." });
+      }
+
+      const result = await bot.sendDailyNewsReport({ forced: true });
+      if (!result?.ok) {
+        return res.status(400).json({ error: result?.message || "Daily news report could not be sent." });
+      }
+
+      return res.json({
+        ok: true,
+        message: `Daily news report sent to channel ${result.channelId}.`,
+        details: {
+          availableCount: result.availableCount,
+          usage: result.usage
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.post("/admin/requests/backfill", authMiddleware, async (req, res, next) => {

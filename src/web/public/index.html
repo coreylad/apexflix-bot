@@ -149,6 +149,10 @@
                   <input name="updatesChannelId" type="text" placeholder="123456789012345678" />
                 </label>
                 <label>
+                  News Channel ID
+                  <input name="newsChannelId" type="text" placeholder="123456789012345678" />
+                </label>
+                <label>
                   Request Role ID (optional ping)
                   <input name="requestRoleId" type="text" placeholder="123456789012345678" />
                 </label>
@@ -175,6 +179,10 @@
                   Announce every status transition
                 </label>
                 <label class="check-label">
+                  <input name="dailyNewsEnabled" type="checkbox" />
+                  Send daily news report automatically
+                </label>
+                <label class="check-label">
                   <input name="dmOnStatusChange" type="checkbox" />
                   DM linked users on status changes
                 </label>
@@ -185,6 +193,19 @@
                 <label class="check-label">
                   <input name="useRichEmbeds" type="checkbox" />
                   Use rich embeds for bot announcements
+                </label>
+              </div>
+            </section>
+
+            <section class="settings-group">
+              <h3>Daily News Scheduler</h3>
+              <p class="muted small-muted">
+                Runs once per day at the selected local server hour. Report includes recently available Seerr items and privacy-safe Jellyfin aggregate stats.
+              </p>
+              <div class="settings-group-grid">
+                <label>
+                  Daily News Hour (0-23, local server time)
+                  <input name="dailyNewsHourLocal" type="number" min="0" max="23" placeholder="9" />
                 </label>
               </div>
             </section>
@@ -213,8 +234,10 @@
           </form>
           <div class="admin-actions">
             <button id="saveBotConfigBtn" type="button">Save Bot Config</button>
+            <button id="sendDailyNewsBtn" type="button">Send Daily News Now</button>
           </div>
           <p id="botConfigResult"></p>
+          <p id="dailyNewsResult"></p>
         </article>
 
         <article class="card">

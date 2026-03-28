@@ -1270,16 +1270,43 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
       return "";
     }
 
-    if (/^https?:\/\//i.test(raw)) {
-      return raw;
+    const withProtocol =
+      !/^https?:\/\//i.test(raw) && /ko-?fi\.com/i.test(raw)
+        ? `https://${raw}`
+        : raw;
+
+    let username = "";
+
+    if (/^https?:\/\//i.test(withProtocol)) {
+      try {
+        const parsed = new URL(withProtocol);
+        const host = String(parsed.hostname || "").toLowerCase();
+        if (host === "ko-fi.com" || host === "www.ko-fi.com") {
+          username = parsed.pathname
+            .split("/")
+            .map((part) => part.trim())
+            .filter(Boolean)[0] || "";
+        }
+      } catch (error) {
+        // Fall through to non-URL normalization.
+      }
     }
 
-    const normalized = raw.replace(/^@/, "").replace(/^ko-?fi\//i, "").trim();
-    if (!normalized) {
+    if (!username) {
+      username = raw
+        .replace(/^@/, "")
+        .replace(/^https?:\/\/(www\.)?ko-?fi\.com\//i, "")
+        .replace(/^(www\.)?ko-?fi\.com\//i, "")
+        .replace(/^ko-?fi\//i, "")
+        .split(/[/?#]/)[0]
+        .trim();
+    }
+
+    if (!username) {
       return "";
     }
 
-    return `https://ko-fi.com/${normalized}`;
+    return `https://ko-fi.com/${username}`;
   }
 
   async function handleDonate(interaction) {

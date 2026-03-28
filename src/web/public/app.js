@@ -298,6 +298,7 @@ const TAB_TITLES = {
   tabChannels: "Channels & Roles",
   tabEnvironment: "Environment",
   tabDonations: "Donations",
+  tabRoulette: "Roulette",
   tabLogs: "Logs",
   tabJellyfinLogs: "Jellyfin Logs",
   tabSystem: "System"
@@ -357,6 +358,9 @@ function onTabActivated(id) {
       break;
     case "tabDonations":
       loadDonationSettings();
+      break;
+    case "tabRoulette":
+      loadRouletteSettings();
       break;
     case "tabLogs":
       // Load recent logs when user views the Logs tab
@@ -1208,27 +1212,57 @@ function renderDonationPreview() {
   const preview = document.getElementById("donationPreview");
   if (!preview) return;
 
-  const rawUrl = String(document.getElementById("koFiUrl")?.value || "");
   const message = String(document.getElementById("donationMessage")?.value || "").trim();
-  const normalizedUrl = normalizeKofiUrl(rawUrl);
 
-  if (!normalizedUrl) {
-    preview.innerHTML = `<div class="empty-state">Set a Ko-fi URL to preview your /donate response.</div>`;
+  const platforms = [
+    { label: "Ko-fi", url: normalizeKofiUrl(String(document.getElementById("koFiUrl")?.value || "")) },
+    { label: "PayPal", url: String(document.getElementById("paypalUrl")?.value || "").trim() },
+    { label: "Buy Me a Coffee", url: String(document.getElementById("buyMeCoffeeUrl")?.value || "").trim() },
+    { label: "Patreon", url: String(document.getElementById("patreonUrl")?.value || "").trim() },
+    { label: "GitHub Sponsors", url: String(document.getElementById("githubSponsorsUrl")?.value || "").trim() }
+  ].filter(p => p.url);
+
+  if (!platforms.length) {
+    preview.innerHTML = `<div class="empty-state">Fill in platform URLs to see the /donate preview.</div>`;
     return;
   }
 
-  preview.innerHTML = `<div style="display:grid;gap:0.55rem"><div>${escapeHtml(message || "Support the server with a Ko-fi tip.")}</div><a href="${escapeHtml(normalizedUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(normalizedUrl)}</a></div>`;
+  const links = platforms.map(p =>
+    `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">🔗 ${escapeHtml(p.label)}: ${escapeHtml(p.url)}</a>`
+  ).join("");
+  preview.innerHTML = `<div style="display:grid;gap:0.55rem"><div>${escapeHtml(message || "Support the server with a donation!")}</div>${links}</div>`;
 }
 
 async function loadDonationSettings() {
   try {
-    const data = await fetchJson("api/admin/env");
-    const values = data.values || {};
-    const koFiUrlEl = document.getElementById("koFiUrl");
-    const donationMessageEl = document.getElementById("donationMessage");
-    if (koFiUrlEl) koFiUrlEl.value = values.KO_FI_URL || "";
-    if (donationMessageEl) donationMessageEl.value = values.DONATION_MESSAGE || "Support the server with a Ko-fi tip.";
+    const [envData, botData] = await Promise.all([
+      fetchJson("api/admin/env"),
+      fetchJson("api/admin/bot-config")
+    ]);
+    const v = envData.values || {};
+    const b = botData.config || {};
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ""; };
+    set("koFiUrl",           v.KO_FI_URL);
+    set("paypalUrl",         v.PAYPAL_URL);
+    set("buyMeCoffeeUrl",    v.BUYMEACOFFEE_URL);
+    set("patreonUrl",        v.PATREON_URL);
+    set("githubSponsorsUrl", v.GITHUB_SPONSORS_URL);
+    set("donationMessage",   v.DONATION_MESSAGE || "Support the server with a donation!");
+    set("kofiWebhookSecret", v.KOFI_WEBHOOK_SECRET);
+    set("donationChannelId",  b.donationChannelId);
+    set("donorTier1Amount",   b.donorTier1Amount);
+    set("donorTier1RoleId",   b.donorTier1RoleId);
+    set("donorTier2Amount",   b.donorTier2Amount);
+    set("donorTier2RoleId",   b.donorTier2RoleId);
+    set("donorTier3Amount",   b.donorTier3Amount);
+    set("donorTier3RoleId",   b.donorTier3RoleId);
+
+    const webhookEl = document.getElementById("kofiWebhookUrl");
+    if (webhookEl) webhookEl.textContent = window.location.origin + "/api/webhooks/kofi";
+
     renderDonationPreview();
+    await loadDonationLog();
   } catch (err) {
     setMsg("donationsMsg", `Failed to load: ${err.message}`, "err");
   }
@@ -1236,38 +1270,123 @@ async function loadDonationSettings() {
 
 async function saveDonationSettings() {
   clearMsg("donationsMsg");
-  const rawUrl = String(document.getElementById("koFiUrl")?.value || "").trim();
-  const donationMessage = String(document.getElementById("donationMessage")?.value || "").trim();
-  const normalizedUrl = normalizeKofiUrl(rawUrl);
 
-  if (rawUrl && !normalizedUrl) {
+  const rawKofi = String(document.getElementById("koFiUrl")?.value || "").trim();
+  const normalizedKofi = normalizeKofiUrl(rawKofi);
+  if (rawKofi && !normalizedKofi) {
     setMsg("donationsMsg", "Enter a valid Ko-fi URL or username.", "err");
     return;
   }
 
-  try {
-    const data = await fetchJson("api/admin/env", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        values: {
-          KO_FI_URL: normalizedUrl,
-          DONATION_MESSAGE: donationMessage || "Support the server with a Ko-fi tip."
-        }
-      })
-    });
+  const get = (id) => String(document.getElementById(id)?.value || "").trim();
 
-    if (document.getElementById("koFiUrl")) {
-      document.getElementById("koFiUrl").value = data?.values?.KO_FI_URL || normalizedUrl;
-    }
-    if (document.getElementById("donationMessage")) {
-      document.getElementById("donationMessage").value =
-        data?.values?.DONATION_MESSAGE || donationMessage || "Support the server with a Ko-fi tip.";
-    }
-    setMsg("donationsMsg", "Donations settings saved.", "ok");
+  try {
+    await Promise.all([
+      fetchJson("api/admin/env", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          values: {
+            KO_FI_URL:            normalizedKofi,
+            PAYPAL_URL:           get("paypalUrl"),
+            BUYMEACOFFEE_URL:     get("buyMeCoffeeUrl"),
+            PATREON_URL:          get("patreonUrl"),
+            GITHUB_SPONSORS_URL:  get("githubSponsorsUrl"),
+            DONATION_MESSAGE:     get("donationMessage") || "Support the server with a donation!",
+            KOFI_WEBHOOK_SECRET:  get("kofiWebhookSecret")
+          }
+        })
+      }),
+      fetchJson("api/admin/bot-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          config: {
+            donationChannelId:  get("donationChannelId"),
+            donorTier1Amount:   get("donorTier1Amount"),
+            donorTier1RoleId:   get("donorTier1RoleId"),
+            donorTier2Amount:   get("donorTier2Amount"),
+            donorTier2RoleId:   get("donorTier2RoleId"),
+            donorTier3Amount:   get("donorTier3Amount"),
+            donorTier3RoleId:   get("donorTier3RoleId")
+          }
+        })
+      })
+    ]);
+    setMsg("donationsMsg", "Donation settings saved.", "ok");
     renderDonationPreview();
   } catch (err) {
     setMsg("donationsMsg", err.message, "err");
+  }
+}
+
+async function loadRouletteSettings() {
+  try {
+    const data = await fetchJson("api/admin/bot-config");
+    const b = data.config || {};
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ""; };
+    set("rouletteAllowedRoleId",      b.rouletteAllowedRoleId);
+    set("rouletteStartTime",          b.rouletteStartTime || "10");
+    set("rouletteChooseTimeout",      b.rouletteChooseTimeout || "30");
+    set("rouletteTimeBetweenRounds",  b.rouletteTimeBetweenRounds || "5");
+  } catch (err) {
+    setMsg("rouletteMsg", `Failed to load: ${err.message}`, "err");
+  }
+}
+
+async function saveRouletteSettings() {
+  clearMsg("rouletteMsg");
+  const get = (id) => String(document.getElementById(id)?.value || "").trim();
+  try {
+    await fetchJson("api/admin/bot-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: {
+          rouletteAllowedRoleId:     get("rouletteAllowedRoleId"),
+          rouletteStartTime:         get("rouletteStartTime") || "10",
+          rouletteChooseTimeout:     get("rouletteChooseTimeout") || "30",
+          rouletteTimeBetweenRounds: get("rouletteTimeBetweenRounds") || "5"
+        }
+      })
+    });
+    setMsg("rouletteMsg", "Roulette settings saved.", "ok");
+  } catch (err) {
+    setMsg("rouletteMsg", err.message, "err");
+  }
+}
+
+async function loadDonationLog() {
+  const msgEl = document.getElementById("donationLogMsg");
+  if (!tbody) return;
+  try {
+    const data = await fetchJson("api/admin/donations");
+    const rows = data.donations || [];
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No donations recorded yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const assigned = r.role_assigned ? `<span class="badge badge-green">Assigned</span>` : `
+        <div style="display:flex;gap:0.4rem;align-items:center">
+          <input class="donor-discord-id" data-id="${escapeHtml(String(r.id))}" type="text"
+            placeholder="Discord User ID" value="${escapeHtml(r.discord_user_id || "")}"
+            style="width:14rem" />
+          <button class="btn-primary btn-sm assign-donor-role-btn" data-id="${escapeHtml(String(r.id))}">Assign</button>
+        </div>`;
+      return `<tr>
+        <td>${escapeHtml(fmtDate(r.created_at))}</td>
+        <td>${escapeHtml(r.platform || "")}</td>
+        <td>${escapeHtml(r.from_name || "")}</td>
+        <td>${escapeHtml(r.currency || "")} ${escapeHtml(String(r.amount || ""))}</td>
+        <td>${escapeHtml(r.discord_username || "")}</td>
+        <td title="${escapeHtml(r.message || "")}">${escapeHtml((r.message || "").slice(0, 40))}${(r.message || "").length > 40 ? "…" : ""}</td>
+        <td>${assigned}</td>
+        <td>${r.role_assigned ? "" : `<span class="badge badge-muted">Manual</span>`}</td>
+      </tr>`;
+    }).join("");
+  } catch (err) {
+    if (msgEl) setMsg("donationLogMsg", `Failed to load: ${err.message}`, "err");
   }
 }
 
@@ -1727,8 +1846,38 @@ function wireAll(user) {
 
   // Donations
   document.getElementById("saveDonationsBtn")?.addEventListener("click", saveDonationSettings);
-  document.getElementById("koFiUrl")?.addEventListener("input", renderDonationPreview);
-  document.getElementById("donationMessage")?.addEventListener("input", renderDonationPreview);
+  document.getElementById("donationLogRefreshBtn")?.addEventListener("click", loadDonationLog);
+  ["koFiUrl","paypalUrl","buyMeCoffeeUrl","patreonUrl","githubSponsorsUrl","donationMessage"].forEach(id => {
+    document.getElementById(id)?.addEventListener("input", renderDonationPreview);
+  });
+  document.getElementById("donationLogBody")?.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".assign-donor-role-btn");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const input = document.querySelector(`.donor-discord-id[data-id="${id}"]`);
+    const discordUserId = String(input?.value || "").trim();
+    clearMsg("donationLogMsg");
+    if (!discordUserId) {
+      setMsg("donationLogMsg", "Enter a Discord User ID first.", "err");
+      return;
+    }
+    try {
+      btn.disabled = true;
+      await fetchJson(`api/admin/donations/${encodeURIComponent(id)}/assign-role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discordUserId })
+      });
+      setMsg("donationLogMsg", "Role assigned successfully.", "ok");
+      await loadDonationLog();
+    } catch (err) {
+      btn.disabled = false;
+      setMsg("donationLogMsg", err.message, "err");
+    }
+  });
+
+  // Roulette
+  bindButtonClick("saveRouletteBtn", saveRouletteSettings);
 
   // System
   bindButtonClick("healthRefreshBtn", loadHealth);

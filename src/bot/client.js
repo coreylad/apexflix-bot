@@ -12,6 +12,7 @@ const {
   TextInputStyle
 } = require("discord.js");
 const { buildCommands } = require("./commands");
+const { handleRouletteCommand, handleRouletteInteraction, isRouletteInteraction } = require("./roulette");
 
 const REQUEST_MEDIA_TYPE_SELECT_ID = "request-media-type-select";
 const REQUEST_MODAL_ID_MOVIE = "apexflix-request-modal-movie";
@@ -56,7 +57,18 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     availableAnnouncementTemplate:
       "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}",
     statusAnnouncementTemplate:
-      "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}"
+      "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}",
+    donationChannelId: "",
+    donorTier1Amount: "",
+    donorTier1RoleId: "",
+    donorTier2Amount: "",
+    donorTier2RoleId: "",
+    donorTier3Amount: "",
+    donorTier3RoleId: "",
+    rouletteAllowedRoleId: "",
+    rouletteStartTime: "10",
+    rouletteChooseTimeout: "30",
+    rouletteTimeBetweenRounds: "5"
   };
 
   let online = false;
@@ -137,7 +149,18 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
       availableAnnouncementTemplate:
         String(stored.availableAnnouncementTemplate || DEFAULT_BOT_CONFIG.availableAnnouncementTemplate),
       statusAnnouncementTemplate:
-        String(stored.statusAnnouncementTemplate || DEFAULT_BOT_CONFIG.statusAnnouncementTemplate)
+        String(stored.statusAnnouncementTemplate || DEFAULT_BOT_CONFIG.statusAnnouncementTemplate),
+      donationChannelId: normalizeId(stored.donationChannelId || DEFAULT_BOT_CONFIG.donationChannelId),
+      donorTier1Amount: String(stored.donorTier1Amount || ""),
+      donorTier1RoleId: normalizeId(stored.donorTier1RoleId || ""),
+      donorTier2Amount: String(stored.donorTier2Amount || ""),
+      donorTier2RoleId: normalizeId(stored.donorTier2RoleId || ""),
+      donorTier3Amount: String(stored.donorTier3Amount || ""),
+      donorTier3RoleId: normalizeId(stored.donorTier3RoleId || ""),
+      rouletteAllowedRoleId: normalizeId(stored.rouletteAllowedRoleId || DEFAULT_BOT_CONFIG.rouletteAllowedRoleId),
+      rouletteStartTime: String(stored.rouletteStartTime || DEFAULT_BOT_CONFIG.rouletteStartTime),
+      rouletteChooseTimeout: String(stored.rouletteChooseTimeout || DEFAULT_BOT_CONFIG.rouletteChooseTimeout),
+      rouletteTimeBetweenRounds: String(stored.rouletteTimeBetweenRounds || DEFAULT_BOT_CONFIG.rouletteTimeBetweenRounds)
     };
   }
 
@@ -1282,10 +1305,12 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         const parsed = new URL(withProtocol);
         const host = String(parsed.hostname || "").toLowerCase();
         if (host === "ko-fi.com" || host === "www.ko-fi.com") {
-          username = parsed.pathname
+          const parts = parsed.pathname
             .split("/")
             .map((part) => part.trim())
-            .filter(Boolean)[0] || "";
+            .filter(Boolean)
+            .filter((part) => !/^(www\.)?ko-?fi\.com$/i.test(part));
+          username = parts[0] || "";
         }
       } catch (error) {
         // Fall through to non-URL normalization.
@@ -1298,6 +1323,7 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         .replace(/^https?:\/\/(www\.)?ko-?fi\.com\//i, "")
         .replace(/^(www\.)?ko-?fi\.com\//i, "")
         .replace(/^ko-?fi\//i, "")
+        .replace(/^(www\.)?ko-?fi\.com\//i, "")
         .split(/[/?#]/)[0]
         .trim();
     }
@@ -1310,26 +1336,145 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
   }
 
   async function handleDonate(interaction) {
-    const donationUrl = resolveDonationUrl();
-    const donationMessage = String(config?.donations?.message || "Support the server with a Ko-fi tip.").trim();
+    const donationMessage = String(config?.donations?.message || "Support the server with a donation!").trim();
 
-    if (!donationUrl) {
+    const platforms = [
+      { label: "Ko-fi", url: resolveDonationUrl() },
+      { label: "PayPal", url: String(config?.donations?.paypalUrl || "").trim() },
+      { label: "Buy Me a Coffee", url: String(config?.donations?.buyMeCoffeeUrl || "").trim() },
+      { label: "Patreon", url: String(config?.donations?.patreonUrl || "").trim() },
+      { label: "GitHub Sponsors", url: String(config?.donations?.githubSponsorsUrl || "").trim() }
+    ].filter((p) => p.url);
+
+    if (!platforms.length) {
       await interaction.reply(
-        toEphemeralResponse("Donations are not configured yet. Ask an admin to set KO_FI_URL in the Web UI Donations tab.")
+        toEphemeralResponse(
+          "Donations are not configured yet. Ask an admin to add donation links in the Web UI Donations tab."
+        )
       );
       return;
     }
 
-    const response = [
+    const lines = [
       donationMessage,
       "",
-      `Ko-fi: ${donationUrl}`
+      ...platforms.map((p) => `${p.label}: ${p.url}`)
     ].join("\n");
 
     await interaction.reply({
-      content: response,
+      content: lines,
       allowedMentions: { parse: [] }
     });
+  }
+
+  async function announceDonation({ donationId, platform, fromName, amount, currency, message, discordUsername, type }) {
+    if (!online) {
+      return { ok: false, message: "Bot not online." };
+    }
+
+    const cfg = getBotConfig();
+    const channelId = cfg.donationChannelId;
+    let discordUserId = "";
+    let roleAssigned = false;
+
+    // Try to resolve Discord member from username embedded in Ko-fi message
+    if (discordUsername && config.discord.guildId) {
+      try {
+        const guild = await client.guilds.fetch(config.discord.guildId);
+        const members = await guild.members.search({ query: discordUsername, limit: 5 });
+        const match = members.find(
+          (m) =>
+            m.user.username.toLowerCase() === discordUsername.toLowerCase() ||
+            m.displayName.toLowerCase() === discordUsername.toLowerCase()
+        );
+        if (match) {
+          discordUserId = match.user.id;
+        }
+      } catch (error) {
+        logger.warn(`Failed to search guild members for donor "${discordUsername}": ${error.message}`);
+      }
+    }
+
+    // Assign tier role if we found the user
+    if (discordUserId) {
+      try {
+        const result = await assignDonorRole({ discordUserId, amount });
+        if (result.ok) {
+          roleAssigned = true;
+          db.updateDonationDiscordUserId(donationId, discordUserId);
+          db.markDonationRoleAssigned(donationId, result.roleId || "");
+          logger.info(`Assigned donor role ${result.roleId} to ${discordUserId} for ${currency} ${amount} donation.`);
+        }
+      } catch (error) {
+        logger.warn(`Donor role assignment failed for ${discordUserId}: ${error.message}`);
+      }
+    }
+
+    // Post announcement to donation channel
+    if (channelId) {
+      const platformLabel = platform === "kofi" ? "Ko-fi" : String(platform || "Donation").trim();
+      const amountStr = `${currency} ${Number(amount).toFixed(2)}`;
+      const mention = discordUserId ? `<@${discordUserId}>` : "";
+
+      const fields = [
+        { name: "From", value: String(fromName || "Anonymous"), inline: true },
+        { name: "Amount", value: amountStr, inline: true },
+        { name: "Platform", value: platformLabel, inline: true }
+      ];
+      if (message) {
+        fields.push({ name: "Message", value: String(message).slice(0, 256), inline: false });
+      }
+      if (roleAssigned) {
+        fields.push({ name: "Role Assigned", value: "Yes", inline: true });
+      }
+
+      const payload = buildAnnouncementPayload({
+        title: `New ${type || "Donation"} via ${platformLabel}!`,
+        description: `${String(fromName || "Someone")} just donated **${amountStr}**. Thank you! 💛`,
+        color: 0xff5f5f,
+        mention,
+        fields
+      });
+
+      await sendToChannel(channelId, payload);
+    }
+
+    return { ok: true, discordUserId, roleAssigned };
+  }
+
+  async function assignDonorRole({ discordUserId, amount }) {
+    if (!online || !config.discord.guildId || !discordUserId) {
+      return { ok: false, message: "Bot not ready or invalid parameters." };
+    }
+
+    const cfg = getBotConfig();
+    const numericAmount = Number(amount || 0);
+
+    // Build tier list sorted highest first
+    const tiers = [
+      { amount: parseFloat(cfg.donorTier3Amount || 0) || 0, roleId: cfg.donorTier3RoleId },
+      { amount: parseFloat(cfg.donorTier2Amount || 0) || 0, roleId: cfg.donorTier2RoleId },
+      { amount: parseFloat(cfg.donorTier1Amount || 0) || 0, roleId: cfg.donorTier1RoleId }
+    ].filter((t) => t.amount > 0 && t.roleId);
+
+    if (!tiers.length) {
+      return { ok: false, message: "No donor tiers configured." };
+    }
+
+    const matchedTier = tiers.find((t) => numericAmount >= t.amount);
+    if (!matchedTier) {
+      return { ok: false, message: `Donation amount ${numericAmount} is below the lowest configured tier.` };
+    }
+
+    try {
+      const guild = await client.guilds.fetch(config.discord.guildId);
+      const member = await guild.members.fetch(discordUserId);
+      await member.roles.add(matchedTier.roleId);
+      return { ok: true, roleId: matchedTier.roleId, tierAmount: matchedTier.amount };
+    } catch (error) {
+      logger.warn(`Failed to assign donor role ${matchedTier.roleId} to ${discordUserId}: ${error.message}`);
+      return { ok: false, message: error.message };
+    }
   }
 
   async function handleSearch(interaction) {
@@ -1977,6 +2122,18 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
   });
 
   client.on("interactionCreate", async (interaction) => {
+    if (interaction.isButton() && isRouletteInteraction(interaction.customId)) {
+      try {
+        await handleRouletteInteraction(interaction, getBotConfig());
+      } catch (err) {
+        logger.error(`Roulette interaction error: ${err.message}`);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: `Roulette error: ${err.message}`, flags: 64 }).catch(() => {});
+        }
+      }
+      return;
+    }
+
     if (interaction.isStringSelectMenu()) {
       if (interaction.customId === REQUEST_MEDIA_TYPE_SELECT_ID) {
         const mediaType = interaction.values[0];
@@ -2064,6 +2221,9 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         case "requesthelp":
           await handleRequestHelp(interaction);
           break;
+        case "roulette":
+          await handleRouletteCommand(interaction, getBotConfig());
+          break;
         default:
           await interaction.reply(toEphemeralResponse("Unknown command."));
       }
@@ -2101,6 +2261,8 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     sendDailyNewsReport,
     publishJellyfinNowPlayingSnapshot,
     publishJellyfinStatsSnapshot,
+    announceDonation,
+    assignDonorRole,
     getClient: () => client
   };
 }

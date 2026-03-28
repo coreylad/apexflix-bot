@@ -40,7 +40,18 @@ const DEFAULT_BOT_CONFIG = {
   availableAnnouncementTemplate:
     "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}",
   statusAnnouncementTemplate:
-    "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}"
+    "{{event}}\nTitle: {{subject}}\nStatus: {{media_status}}\nRequest ID: {{request_id}}",
+  donationChannelId: "",
+  donorTier1Amount: "",
+  donorTier1RoleId: "",
+  donorTier2Amount: "",
+  donorTier2RoleId: "",
+  donorTier3Amount: "",
+  donorTier3RoleId: "",
+  rouletteAllowedRoleId: "",
+  rouletteStartTime: "10",
+  rouletteChooseTimeout: "30",
+  rouletteTimeBetweenRounds: "5"
 };
 
 function asBoolString(value, fallback = "false") {
@@ -101,8 +112,31 @@ function normalizeBotConfig(input) {
     availableAnnouncementTemplate:
       String(source.availableAnnouncementTemplate || DEFAULT_BOT_CONFIG.availableAnnouncementTemplate).trim(),
     statusAnnouncementTemplate:
-      String(source.statusAnnouncementTemplate || DEFAULT_BOT_CONFIG.statusAnnouncementTemplate).trim()
+      String(source.statusAnnouncementTemplate || DEFAULT_BOT_CONFIG.statusAnnouncementTemplate).trim(),
+    donationChannelId: normalizeId(source.donationChannelId),
+    donorTier1Amount: normalizeTierAmount(source.donorTier1Amount),
+    donorTier1RoleId: normalizeId(source.donorTier1RoleId),
+    donorTier2Amount: normalizeTierAmount(source.donorTier2Amount),
+    donorTier2RoleId: normalizeId(source.donorTier2RoleId),
+    donorTier3Amount: normalizeTierAmount(source.donorTier3Amount),
+    donorTier3RoleId: normalizeId(source.donorTier3RoleId),
+    rouletteAllowedRoleId: normalizeId(source.rouletteAllowedRoleId),
+    rouletteStartTime: normalizePositiveInt(source.rouletteStartTime, '10', 5, 60),
+    rouletteChooseTimeout: normalizePositiveInt(source.rouletteChooseTimeout, '30', 10, 120),
+    rouletteTimeBetweenRounds: normalizePositiveInt(source.rouletteTimeBetweenRounds, '5', 2, 30)
   };
+}
+
+function normalizeTierAmount(value) {
+  const raw = String(value ?? "").trim();
+  const parsed = parseFloat(raw);
+  return !isNaN(parsed) && parsed >= 0 ? String(parsed) : "";
+}
+
+function normalizePositiveInt(value, fallback, min, max) {
+  const n = parseInt(String(value ?? '').trim(), 10);
+  if (Number.isInteger(n) && n >= min && n <= max) return String(n);
+  return fallback;
 }
 
 function firstNonEmpty(values, fallback = "") {
@@ -900,7 +934,125 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
     }
   });
 
+  // Ko-fi webhook — no auth, verified by token
+  router.post("/webhooks/kofi", async (req, res, next) => {
+    try {
+      const rawData = req.body?.data;
+      if (!rawData) {
+        return res.status(400).json({ error: "Missing webhook data" });
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(rawData);
+      } catch {
+        return res.status(400).json({ error: "Invalid webhook payload" });
+      }
+
+      const secret = String(config?.donations?.kofiWebhookSecret || "").trim();
+      if (secret) {
+        const token = String(payload.verification_token || "");
+        if (token !== secret) {
+          return res.status(401).json({ error: "Invalid verification token" });
+        }
+      }
+
+      const fromName = String(payload.from_name || "Anonymous");
+      const message = String(payload.message || "");
+      const amount = parseFloat(payload.amount || 0) || 0;
+      const currency = String(payload.currency || "USD").toUpperCase();
+      const transactionId = String(payload.kofi_transaction_id || payload.message_id || "");
+      const type = String(payload.type || "Donation");
+
+      // Best-effort: extract Discord username from donation message
+      const discordMatch =
+        message.match(/discord[:\s=@]+([a-zA-Z0-9_.]{2,32})/i) ||
+        message.match(/(?:^|\s)@([a-zA-Z0-9_.]{2,32})(?:\s|$)/m);
+      const discordUsername = discordMatch?.[1]?.trim() || "";
+
+      const donationId = db.insertDonation({
+        platform: "kofi",
+        transactionId,
+        fromName,
+        discordUsername,
+        discordUserId: "",
+        amount,
+        currency,
+        message,
+        rawPayload: rawData
+      });
+
+      if (bot && typeof bot.announceDonation === "function") {
+        bot.announceDonation({
+          donationId: Number(donationId),
+          platform: "kofi",
+          fromName,
+          amount,
+          currency,
+          message,
+          discordUsername,
+          type
+        }).catch((err) => logger.warn(`Donation announce failed: ${err.message}`));
+      }
+
+      return res.status(200).json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.use(authMiddleware);
+
+  // ---- Donation admin endpoints ---------------------------------------
+  router.get("/admin/donations", (req, res, next) => {
+    try {
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const donations = db.getRecentDonations(limit);
+      return res.json({ ok: true, donations });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/donations/:id/assign-role", async (req, res, next) => {
+    try {
+      const donationId = Number(req.params.id);
+      if (!Number.isInteger(donationId) || donationId <= 0) {
+        return res.status(400).json({ error: "Invalid donation ID." });
+      }
+
+      const discordUserId = String(req.body?.discordUserId || "").trim();
+      if (!discordUserId || !/^\d+$/.test(discordUserId)) {
+        return res.status(400).json({ error: "Valid Discord user ID is required." });
+      }
+
+      const donation = db.getDonationById(donationId);
+      if (!donation) {
+        return res.status(404).json({ error: "Donation not found." });
+      }
+
+      if (!bot || typeof bot.assignDonorRole !== "function") {
+        return res.status(503).json({ error: "Discord bot is not ready." });
+      }
+
+      const result = await bot.assignDonorRole({ discordUserId, amount: donation.amount });
+      if (!result.ok) {
+        return res.status(400).json({ error: result.message || "Role assignment failed." });
+      }
+
+      db.updateDonationDiscordUserId(donationId, discordUserId);
+      db.markDonationRoleAssigned(donationId, result.roleId || "");
+
+      return res.json({
+        ok: true,
+        message: `Donor role assigned successfully.`,
+        roleId: result.roleId,
+        tierAmount: result.tierAmount
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   // ---- Logs endpoints -------------------------------------------------
   router.get("/admin/logs", (req, res, next) => {

@@ -144,7 +144,10 @@ function buildCommands() {
       ),
     new SlashCommandBuilder()
       .setName("libraries")
-      .setDescription("Show Jellyfin library sections and types")
+      .setDescription("Show Jellyfin library sections and types"),
+    new SlashCommandBuilder()
+      .setName("roulette")
+      .setDescription("Start a roulette elimination game — last player standing wins! 🎰")
   ];
 }
 

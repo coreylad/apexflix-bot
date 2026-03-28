@@ -1264,6 +1264,47 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     );
   }
 
+  function resolveDonationUrl() {
+    const raw = String(config?.donations?.kofiUrl || "").trim();
+    if (!raw) {
+      return "";
+    }
+
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
+
+    const normalized = raw.replace(/^@/, "").replace(/^ko-?fi\//i, "").trim();
+    if (!normalized) {
+      return "";
+    }
+
+    return `https://ko-fi.com/${normalized}`;
+  }
+
+  async function handleDonate(interaction) {
+    const donationUrl = resolveDonationUrl();
+    const donationMessage = String(config?.donations?.message || "Support the server with a Ko-fi tip.").trim();
+
+    if (!donationUrl) {
+      await interaction.reply(
+        toEphemeralResponse("Donations are not configured yet. Ask an admin to set KO_FI_URL in the Web UI Donations tab.")
+      );
+      return;
+    }
+
+    const response = [
+      donationMessage,
+      "",
+      `Ko-fi: ${donationUrl}`
+    ].join("\n");
+
+    await interaction.reply({
+      content: response,
+      allowedMentions: { parse: [] }
+    });
+  }
+
   async function handleSearch(interaction) {
     const query = interaction.options.getString("query", true);
     const mediaType = interaction.options.getString("media_type") || "all";
@@ -1956,6 +1997,9 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
           break;
         case "request":
           await handleRequest(interaction);
+          break;
+        case "donate":
+          await handleDonate(interaction);
           break;
         case "musicsearch":
           await handleMusicSearch(interaction);

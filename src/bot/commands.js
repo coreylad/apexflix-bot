@@ -35,6 +35,9 @@ function buildCommands() {
       .setName("requesthelp")
       .setDescription("Show how to use the /request command with TV seasons"),
     new SlashCommandBuilder()
+      .setName("donate")
+      .setDescription("Show how to support this server through Ko-fi"),
+    new SlashCommandBuilder()
       .setName("musicsearch")
       .setDescription("Search Lidarr for artists")
       .addStringOption((option) =>

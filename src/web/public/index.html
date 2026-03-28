@@ -103,6 +103,9 @@
           <button class="nav-btn" data-tab="tabEnvironment">
             <span class="nav-icon"></span> Environment
           </button>
+          <button class="nav-btn" data-tab="tabDonations">
+            <span class="nav-icon"></span> Donations
+          </button>
 
           <div class="nav-section-label">Admin</div>
           <button class="nav-btn" data-tab="tabLogs">
@@ -759,6 +762,47 @@
             <button type="button" class="btn-primary" id="saveEnvBtn">Save Environment</button>
           </div>
           <div id="envMsg" class="msg"></div>
+        </div>
+
+        <!--  TAB: Donations  -->
+        <div id="tabDonations" class="tab-pane">
+          <p class="pane-title">Donations</p>
+          <p class="pane-sub">Configure donation messaging and Ko-fi support for the Discord /donate command.</p>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Ko-fi Settings</div>
+                  <div class="card-subtitle">Supports full URL (https://ko-fi.com/name) or just your Ko-fi username.</div>
+                </div>
+              </div>
+
+              <div class="settings-grid one-col">
+                <label>Ko-fi URL or Username
+                  <input id="koFiUrl" type="text" placeholder="ko-fi.com/apexflix or apexflix" />
+                </label>
+                <label>/donate Message
+                  <textarea id="donationMessage" rows="4" placeholder="Support the server with a Ko-fi tip."></textarea>
+                </label>
+              </div>
+
+              <div class="btn-row" style="margin-top:0.9rem">
+                <button type="button" class="btn-primary" id="saveDonationsBtn">Save Donations</button>
+              </div>
+              <div id="donationsMsg" class="msg"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">/donate Preview</div>
+                  <div class="card-subtitle">This is what users will see when they run /donate.</div>
+                </div>
+              </div>
+              <div id="donationPreview" class="empty-state">Set a Ko-fi URL to preview your /donate response.</div>
+            </div>
+          </div>
         </div>
 
         <!--  TAB: Logs  -->

@@ -297,6 +297,7 @@ const TAB_TITLES = {
   tabBotConfig: "Bot Configuration",
   tabChannels: "Channels & Roles",
   tabEnvironment: "Environment",
+  tabDonations: "Donations",
   tabLogs: "Logs",
   tabJellyfinLogs: "Jellyfin Logs",
   tabSystem: "System"
@@ -353,6 +354,9 @@ function onTabActivated(id) {
       break;
     case "tabEnvironment":
       loadEnvSettings();
+      break;
+    case "tabDonations":
+      loadDonationSettings();
       break;
     case "tabLogs":
       // Load recent logs when user views the Logs tab
@@ -1159,6 +1163,87 @@ async function saveEnvSettings() {
   }
 }
 
+function normalizeKofiUrl(rawValue) {
+  const raw = String(rawValue || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+
+  const normalized = raw.replace(/^@/, "").replace(/^ko-?fi\//i, "").trim();
+  return normalized ? `https://ko-fi.com/${normalized}` : "";
+}
+
+function renderDonationPreview() {
+  const preview = document.getElementById("donationPreview");
+  if (!preview) return;
+
+  const rawUrl = String(document.getElementById("koFiUrl")?.value || "");
+  const message = String(document.getElementById("donationMessage")?.value || "").trim();
+  const normalizedUrl = normalizeKofiUrl(rawUrl);
+
+  if (!normalizedUrl) {
+    preview.innerHTML = `<div class="empty-state">Set a Ko-fi URL to preview your /donate response.</div>`;
+    return;
+  }
+
+  preview.innerHTML = `<div style="display:grid;gap:0.55rem"><div>${escapeHtml(message || "Support the server with a Ko-fi tip.")}</div><a href="${escapeHtml(normalizedUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(normalizedUrl)}</a></div>`;
+}
+
+async function loadDonationSettings() {
+  try {
+    const data = await fetchJson("api/admin/env");
+    const values = data.values || {};
+    const koFiUrlEl = document.getElementById("koFiUrl");
+    const donationMessageEl = document.getElementById("donationMessage");
+    if (koFiUrlEl) koFiUrlEl.value = values.KO_FI_URL || "";
+    if (donationMessageEl) donationMessageEl.value = values.DONATION_MESSAGE || "Support the server with a Ko-fi tip.";
+    renderDonationPreview();
+  } catch (err) {
+    setMsg("donationsMsg", `Failed to load: ${err.message}`, "err");
+  }
+}
+
+async function saveDonationSettings() {
+  clearMsg("donationsMsg");
+  const rawUrl = String(document.getElementById("koFiUrl")?.value || "").trim();
+  const donationMessage = String(document.getElementById("donationMessage")?.value || "").trim();
+  const normalizedUrl = normalizeKofiUrl(rawUrl);
+
+  if (rawUrl && !normalizedUrl) {
+    setMsg("donationsMsg", "Enter a valid Ko-fi URL or username.", "err");
+    return;
+  }
+
+  try {
+    const data = await fetchJson("api/admin/env", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        values: {
+          KO_FI_URL: normalizedUrl,
+          DONATION_MESSAGE: donationMessage || "Support the server with a Ko-fi tip."
+        }
+      })
+    });
+
+    if (document.getElementById("koFiUrl")) {
+      document.getElementById("koFiUrl").value = data?.values?.KO_FI_URL || normalizedUrl;
+    }
+    if (document.getElementById("donationMessage")) {
+      document.getElementById("donationMessage").value =
+        data?.values?.DONATION_MESSAGE || donationMessage || "Support the server with a Ko-fi tip.";
+    }
+    setMsg("donationsMsg", "Donations settings saved.", "ok");
+    renderDonationPreview();
+  } catch (err) {
+    setMsg("donationsMsg", err.message, "err");
+  }
+}
+
 async function testLidarrEnvConnection() {
   const values = collectFormValues("envForm");
   setLidarrTestButtonState({ busy: true, text: "Testing Lidarr connection...", type: "info" });
@@ -1612,6 +1697,11 @@ function wireAll(user) {
       testLidarrEnvConnection();
     }
   });
+
+  // Donations
+  document.getElementById("saveDonationsBtn")?.addEventListener("click", saveDonationSettings);
+  document.getElementById("koFiUrl")?.addEventListener("input", renderDonationPreview);
+  document.getElementById("donationMessage")?.addEventListener("input", renderDonationPreview);
 
   // System
   bindButtonClick("healthRefreshBtn", loadHealth);

@@ -51,6 +51,7 @@ const config = {
   overseerr: {},
   lidarr: {},
   jellyfin: {},
+  donations: {},
   app: {}
 };
 
@@ -85,6 +86,9 @@ function refreshConfigFromProcess() {
   config.jellyfin.clientVersion = optional("JELLYFIN_CLIENT_VERSION", "1.0.0");
   config.jellyfin.allowInsecureTls = optionalBoolean("JELLYFIN_ALLOW_INSECURE_TLS", false);
   config.jellyfin.logDir = optional("JELLYFIN_LOG_DIR", optional("JELLYFIN_FFMPEG_LOG_DIR", "/var/log/jellyfin"));
+
+  config.donations.kofiUrl = optionalTrimmed("KO_FI_URL");
+  config.donations.message = optionalTrimmed("DONATION_MESSAGE", "Support the server with a Ko-fi tip.");
 
   config.app.port = optionalNumber("PORT", 1337);
   config.app.requestStatusPollSeconds = optionalNumber("REQUEST_STATUS_POLL_SECONDS", 60);

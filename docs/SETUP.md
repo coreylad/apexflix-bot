@@ -69,6 +69,7 @@ DISCORD_GUILD_ID
 OVERSEERR_URL
 OVERSEERR_API_KEY
 OVERSEERR_DEFAULT_USER_ID
+TMDB_API_READ_TOKEN
 JELLYFIN_URL
 JELLYFIN_API_KEY
 JELLYFIN_USER_ID
@@ -88,6 +89,7 @@ LOG_LEVEL
 
 Notes:
 - Jellyfin and Overseerr settings are applied to runtime immediately after saving.
+- TMDB discovery starts working as soon as `TMDB_API_READ_TOKEN` is saved.
 - Discord token, client ID, and guild ID should be treated as restart-required values.
 - On later visits, you will see the login screen instead of the setup wizard.
 
@@ -218,6 +220,41 @@ http://192.168.1.20:8096
 ```
 
 6. For the user ID, open Jellyfin in a browser as the target user and inspect the URL or API responses depending on your setup. Use the user ID for the account whose library/recent items you want to display.
+
+### TMDB
+
+You need:
+- `TMDB_API_READ_TOKEN`
+
+How to get it:
+1. Log in to TMDB.
+2. Open your account API settings.
+3. Create or copy the v4 read access token.
+4. Paste it into `TMDB_API_READ_TOKEN` in ApexFlix.
+
+This token powers the dashboard Discover panel and the Discord `/discover` command.
+
+### Jellyfin user presets
+
+In the Bot Config tab you can also set:
+- `jellyfinAdminRoleIds`: comma-separated Discord role IDs allowed to create Jellyfin users.
+- `jellyfinUserGroupPresets`: JSON access presets used by the dashboard and `/jellyfinadduser`.
+
+Example preset JSON:
+
+```json
+[
+	{
+		"id": "default",
+		"name": "Default Members",
+		"enableAllFolders": true,
+		"enabledFolders": [],
+		"enableMediaPlayback": true,
+		"isAdministrator": false,
+		"maxParentalRating": null
+	}
+]
+```
 
 ## 7. Running with systemd
 

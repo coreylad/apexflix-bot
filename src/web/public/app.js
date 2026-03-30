@@ -117,6 +117,10 @@ function renderEnvForm(targetId, allowedKeys, values) {
       ]
     },
     {
+      title: "TMDB",
+      keys: ["TMDB_API_READ_TOKEN", "TMDB_BASE_URL"]
+    },
+    {
       title: "Lidarr",
       keys: [
         "LIDARR_URL",
@@ -220,7 +224,7 @@ function renderEnvForm(targetId, allowedKeys, values) {
       }
     }
 
-    if (key === "JELLYFIN_API_KEY") {
+    if (key === "JELLYFIN_API_KEY" || key === "TMDB_API_READ_TOKEN") {
       return `<label>${label}<input name="${key}" type="password" autocomplete="off" value="${safeVal}" /></label>`;
     }
 
@@ -239,6 +243,9 @@ function renderEnvForm(targetId, allowedKeys, values) {
       if (targetId === "envForm" && group.title === "Overseerr") {
         appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testOverseerrEnvBtn">Test Overseerr Connection</button><div id="testOverseerrEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
       }
+      if (targetId === "envForm" && group.title === "TMDB") {
+        appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testTmdbEnvBtn">Test TMDB Connection</button><div id="testTmdbEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
+      }
       if (targetId === "envForm" && group.title === "Jellyfin") {
         appActions = `<div class="btn-row" style="margin-top:0.9rem"><button type="button" class="btn-secondary" id="testJellyfinEnvBtn">Test Jellyfin Connection</button><button type="button" class="btn-secondary" id="loadJellyfinDefaultsBtn">Load Jellyfin Defaults</button><div id="testJellyfinEnvStatus" class="msg" style="margin:0;flex:1 1 280px"></div></div>`;
       }
@@ -255,6 +262,7 @@ function setAppTestButtonState(app, { busy = false, text = "", type = "info" } =
   const key = String(app || "").toLowerCase();
   const map = {
     overseerr: { buttonId: "testOverseerrEnvBtn", statusId: "testOverseerrEnvStatus", label: "Test Overseerr Connection" },
+    tmdb: { buttonId: "testTmdbEnvBtn", statusId: "testTmdbEnvStatus", label: "Test TMDB Connection" },
     jellyfin: { buttonId: "testJellyfinEnvBtn", statusId: "testJellyfinEnvStatus", label: "Test Jellyfin Connection" },
     lidarr: { buttonId: "testLidarrEnvBtn", statusId: "testLidarrEnvStatus", label: "Test Lidarr Connection" }
   };
@@ -298,7 +306,6 @@ const TAB_TITLES = {
   tabChannels: "Channels & Roles",
   tabEnvironment: "Environment",
   tabDonations: "Donations",
-  tabRoulette: "Roulette",
   tabLogs: "Logs",
   tabJellyfinLogs: "Jellyfin Logs",
   tabSystem: "System"
@@ -309,6 +316,9 @@ let logEventSource = null;
 let logUnreadCount = 0;
 let jellyfinLogsAutoRefreshTimer = null;
 let lidarrArtistResults = [];
+let discoverMetaCache = null;
+let discoverResultsCache = [];
+let jellyfinUserPresetCache = [];
 
 function switchTab(id) {
   if (activeTab === id) return;
@@ -334,6 +344,8 @@ function onTabActivated(id) {
       break;
     case "tabRequests":
       loadRequestsTable();
+      loadDiscoverMeta();
+      loadDiscoverResults();
       loadLidarrOptions();
       loadLidarrLibraryStats();
       loadLidarrArtists();
@@ -343,6 +355,7 @@ function onTabActivated(id) {
       loadJellyfinStats();
       loadJellyfinNowPlaying();
       loadJellyfinLibraries();
+      loadJellyfinUsers();
       break;
     case "tabReports":
       loadReports();
@@ -358,9 +371,6 @@ function onTabActivated(id) {
       break;
     case "tabDonations":
       loadDonationSettings();
-      break;
-    case "tabRoulette":
-      loadRouletteSettings();
       break;
     case "tabLogs":
       // Load recent logs when user views the Logs tab
@@ -628,6 +638,171 @@ function wireRequestForm() {
       setMsg("requestMsg", err.message, "err");
     }
   });
+}
+
+function setRequestFormValues({ mediaType, mediaId, season = "" }) {
+  const form = document.getElementById("requestForm");
+  if (!form) return;
+  const mediaTypeSelect = form.querySelector("select[name='mediaType']");
+  const mediaIdInput = form.querySelector("input[name='mediaId']");
+  const seasonInput = form.querySelector("input[name='season']");
+  const seasonLabel = document.getElementById("seasonLabel");
+
+  if (mediaTypeSelect) mediaTypeSelect.value = mediaType || "movie";
+  if (mediaIdInput) mediaIdInput.value = mediaId ? String(mediaId) : "";
+  if (seasonInput) seasonInput.value = season || "";
+  if (seasonLabel) seasonLabel.style.display = mediaType === "tv" ? "block" : "none";
+}
+
+function populateDiscoverCategoryOptions() {
+  const mediaType = document.getElementById("discoverMediaType")?.value || "movie";
+  const select = document.getElementById("discoverCategory");
+  if (!select || !discoverMetaCache?.categories) return;
+
+  const categories = discoverMetaCache.categories[mediaType] || [];
+  const current = String(select.value || "");
+  select.innerHTML = categories
+    .map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value.replace(/_/g, " "))}</option>`)
+    .join("");
+  select.value = categories.includes(current) ? current : categories[0] || "popular";
+}
+
+function populateDiscoverGenreOptions() {
+  const mediaType = document.getElementById("discoverMediaType")?.value || "movie";
+  const select = document.getElementById("discoverGenre");
+  if (!select) return;
+
+  const genres = discoverMetaCache?.genres?.[mediaType] || [];
+  const current = String(select.value || "");
+  select.innerHTML = [`<option value="">All Genres</option>`]
+    .concat(genres.map((genre) => `<option value="${escapeHtml(String(genre.id || ""))}">${escapeHtml(genre.name || "Unknown")}</option>`))
+    .join("");
+  select.value = genres.some((genre) => String(genre.id) === current) ? current : "";
+}
+
+async function loadDiscoverMeta() {
+  if (discoverMetaCache) {
+    populateDiscoverCategoryOptions();
+    populateDiscoverGenreOptions();
+    return;
+  }
+
+  try {
+    const data = await fetchJson("api/discover/meta");
+    discoverMetaCache = data;
+    populateDiscoverCategoryOptions();
+    populateDiscoverGenreOptions();
+  } catch (err) {
+    setMsg("discoverMsg", err.message, "err");
+  }
+}
+
+function renderDiscoverResults(items) {
+  const box = document.getElementById("discoverResults");
+  if (!box) return;
+
+  if (!items.length) {
+    box.innerHTML = `<div class="empty-state col-span-2">No TMDB results found.</div>`;
+    return;
+  }
+
+  box.innerHTML = items
+    .map((item, index) => {
+      const overview = String(item.overview || "").trim();
+      const release = item.releaseDate ? item.releaseDate.slice(0, 4) : "TBA";
+      const rating = item.voteAverage ? item.voteAverage.toFixed(1) : "n/a";
+      const poster = item.posterPath ? `https://image.tmdb.org/t/p/w300${item.posterPath}` : "";
+      return `
+        <div class="card">
+          <div style="display:grid;grid-template-columns:${poster ? "92px 1fr" : "1fr"};gap:1rem;align-items:start">
+            ${poster ? `<img src="${escapeHtml(poster)}" alt="${escapeHtml(item.title || "Poster")}" style="width:92px;height:138px;object-fit:cover;border-radius:14px;background:rgba(255,255,255,0.05)" />` : ""}
+            <div style="display:grid;gap:0.65rem">
+              <div>
+                <div class="card-title" style="font-size:1rem">${escapeHtml(item.title || "Unknown title")}</div>
+                <div class="muted-text">${escapeHtml(item.mediaType || "movie")} • ${escapeHtml(release)} • Rating ${escapeHtml(String(rating))} • TMDB ${escapeHtml(String(item.id || ""))}</div>
+              </div>
+              <div class="text-sm muted-text">${escapeHtml(overview || "No overview available.")}</div>
+              <div class="btn-row">
+                <button type="button" class="btn-secondary btn-sm discover-use-btn" data-index="${index}">Use In Request Form</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    })
+    .join("");
+}
+
+async function loadDiscoverResults() {
+  const mediaType = document.getElementById("discoverMediaType")?.value || "movie";
+  const category = document.getElementById("discoverCategory")?.value || "popular";
+  const genre = document.getElementById("discoverGenre")?.value || "";
+  const query = String(document.getElementById("discoverQuery")?.value || "").trim();
+  const page = Number(document.getElementById("discoverPage")?.value || 1) || 1;
+
+  setMsg("discoverMsg", "Loading TMDB results...", "info");
+  try {
+    const qs = new URLSearchParams({
+      mediaType,
+      category,
+      page: String(page)
+    });
+    if (genre) qs.set("genre", genre);
+    if (query) qs.set("query", query);
+
+    const data = await fetchJson(`api/discover?${qs.toString()}`);
+    discoverResultsCache = data.results || [];
+    renderDiscoverResults(discoverResultsCache);
+    setMsg(
+      "discoverMsg",
+      `Loaded ${discoverResultsCache.length} result${discoverResultsCache.length === 1 ? "" : "s"} from TMDB page ${data.page || page}.`,
+      "ok"
+    );
+  } catch (err) {
+    discoverResultsCache = [];
+    renderDiscoverResults([]);
+    setMsg("discoverMsg", err.message, "err");
+  }
+}
+
+function wireDiscoverForm() {
+  const form = document.getElementById("discoverForm");
+  if (form && !form.dataset.wired) {
+    form.dataset.wired = "1";
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await loadDiscoverResults();
+    });
+  }
+
+  const mediaType = document.getElementById("discoverMediaType");
+  if (mediaType && !mediaType.dataset.wired) {
+    mediaType.dataset.wired = "1";
+    mediaType.addEventListener("change", () => {
+      populateDiscoverCategoryOptions();
+      populateDiscoverGenreOptions();
+    });
+  }
+
+  const results = document.getElementById("discoverResults");
+  if (results && !results.dataset.wired) {
+    results.dataset.wired = "1";
+    results.addEventListener("click", (e) => {
+      const button = e.target.closest(".discover-use-btn");
+      if (!button) return;
+      const index = Number(button.dataset.index);
+      const item = discoverResultsCache[index];
+      if (!item) return;
+      setRequestFormValues({ mediaType: item.mediaType || "movie", mediaId: item.id || "", season: item.mediaType === "tv" ? "latest" : "" });
+      setMsg(
+        "requestMsg",
+        item.mediaType === "tv"
+          ? `Loaded ${item.title} into the request form. Adjust the season if needed, then submit.`
+          : `Loaded ${item.title} into the request form. Submit when ready.`,
+        "info"
+      );
+      document.getElementById("requestForm")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 }
 
 function renderSelectOptions(elementId, items, selectedValue, valueKey, labelKey) {
@@ -935,6 +1110,92 @@ async function loadJellyfinLibraries() {
   }
 }
 
+function renderJellyfinPresetOptions(presets) {
+  const select = document.getElementById("jellyfinPresetSelect");
+  if (!select) return;
+
+  const rows = Array.isArray(presets) ? presets : [];
+  select.innerHTML = rows.length
+    ? rows.map((preset) => `<option value="${escapeHtml(preset.id || "")}">${escapeHtml(preset.name || preset.id || "Preset")}</option>`).join("")
+    : `<option value="default">Default</option>`;
+}
+
+async function loadJellyfinUsers() {
+  const tbody = document.getElementById("jellyUsersBody");
+  if (!tbody) return;
+
+  try {
+    const data = await fetchJson("api/admin/jellyfin/users");
+    const users = data.users || [];
+    jellyfinUserPresetCache = data.presets || [];
+    renderJellyfinPresetOptions(jellyfinUserPresetCache);
+
+    if (!users.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">No Jellyfin users found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = users
+      .map((user) => {
+        const admin = user.isAdministrator
+          ? `<span class="badge badge-green">Admin</span>`
+          : `<span class="badge badge-muted">Member</span>`;
+        const status = user.isDisabled
+          ? `<span class="badge badge-red">Disabled</span>`
+          : `<span class="badge badge-blue">Active</span>`;
+        const access = user.enableAllFolders
+          ? "All libraries"
+          : user.enabledFolders?.length
+            ? `${user.enabledFolders.length} selected libraries`
+            : "No folders assigned";
+        return `<tr>
+          <td>${escapeHtml(user.name || "Unknown")}</td>
+          <td>${admin}</td>
+          <td>${status}</td>
+          <td class="muted-text">${escapeHtml(access)}</td>
+        </tr>`;
+      })
+      .join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
+    setMsg("jellyUsersMsg", err.message, "err");
+  }
+}
+
+function wireJellyfinUserForm() {
+  const form = document.getElementById("jellyfinUserForm");
+  if (form && !form.dataset.wired) {
+    form.dataset.wired = "1";
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearMsg("jellyUsersMsg");
+      const username = String(document.getElementById("jellyfinNewUsername")?.value || "").trim();
+      const password = String(document.getElementById("jellyfinNewPassword")?.value || "");
+      const presetId = String(document.getElementById("jellyfinPresetSelect")?.value || "default").trim();
+
+      if (!username || !password) {
+        setMsg("jellyUsersMsg", "Username and password are required.", "err");
+        return;
+      }
+
+      setMsg("jellyUsersMsg", `Creating Jellyfin user ${username}...`, "info");
+      try {
+        const data = await fetchJson("api/admin/jellyfin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password, presetId })
+        });
+        setMsg("jellyUsersMsg", data.message || `Created Jellyfin user ${username}.`, "ok");
+        form.reset();
+        renderJellyfinPresetOptions(jellyfinUserPresetCache);
+        await loadJellyfinUsers();
+      } catch (err) {
+        setMsg("jellyUsersMsg", err.message, "err");
+      }
+    });
+  }
+}
+
 /*  reports tab  */
 async function loadReports() {
   const tbody = document.getElementById("reportsTableBody");
@@ -986,6 +1247,8 @@ const BOT_BOOL_FIELDS = [
 
 const BOT_TEXT_FIELDS = [
   "dailyNewsHourLocal",
+  "jellyfinAdminRoleIds",
+  "jellyfinUserGroupPresets",
   "requestAnnouncementTemplate",
   "availableAnnouncementTemplate",
   "statusAnnouncementTemplate"
@@ -1139,6 +1402,9 @@ async function loadEnvSettings() {
     setTimeout(() => {
       if (envValuesCache.OVERSEERR_URL && envValuesCache.OVERSEERR_API_KEY) {
         testOverseerrEnvConnection();
+      }
+      if (envValuesCache.TMDB_API_READ_TOKEN) {
+        testTmdbEnvConnection();
       }
       if (envValuesCache.JELLYFIN_URL && envValuesCache.JELLYFIN_API_KEY) {
         testJellyfinEnvConnection();
@@ -1320,44 +1586,9 @@ async function saveDonationSettings() {
   }
 }
 
-async function loadRouletteSettings() {
-  try {
-    const data = await fetchJson("api/admin/bot-config");
-    const b = data.config || {};
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ""; };
-    set("rouletteAllowedRoleId",      b.rouletteAllowedRoleId);
-    set("rouletteStartTime",          b.rouletteStartTime || "10");
-    set("rouletteChooseTimeout",      b.rouletteChooseTimeout || "30");
-    set("rouletteTimeBetweenRounds",  b.rouletteTimeBetweenRounds || "5");
-  } catch (err) {
-    setMsg("rouletteMsg", `Failed to load: ${err.message}`, "err");
-  }
-}
-
-async function saveRouletteSettings() {
-  clearMsg("rouletteMsg");
-  const get = (id) => String(document.getElementById(id)?.value || "").trim();
-  try {
-    await fetchJson("api/admin/bot-config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        config: {
-          rouletteAllowedRoleId:     get("rouletteAllowedRoleId"),
-          rouletteStartTime:         get("rouletteStartTime") || "10",
-          rouletteChooseTimeout:     get("rouletteChooseTimeout") || "30",
-          rouletteTimeBetweenRounds: get("rouletteTimeBetweenRounds") || "5"
-        }
-      })
-    });
-    setMsg("rouletteMsg", "Roulette settings saved.", "ok");
-  } catch (err) {
-    setMsg("rouletteMsg", err.message, "err");
-  }
-}
-
 async function loadDonationLog() {
   const msgEl = document.getElementById("donationLogMsg");
+  const tbody = document.getElementById("donationLogBody");
   if (!tbody) return;
   try {
     const data = await fetchJson("api/admin/donations");
@@ -1435,6 +1666,21 @@ async function testOverseerrEnvConnection() {
     setAppTestButtonState("overseerr", { busy: false, text: data.message || "Connected to Overseerr.", type: "ok" });
   } catch (err) {
     setAppTestButtonState("overseerr", { busy: false, text: err.message, type: "err" });
+  }
+}
+
+async function testTmdbEnvConnection() {
+  const values = collectFormValues("envForm");
+  setAppTestButtonState("tmdb", { busy: true, text: "Testing TMDB connection...", type: "info" });
+  try {
+    const data = await fetchJson("api/admin/tmdb/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values })
+    });
+    setAppTestButtonState("tmdb", { busy: false, text: data.message || "Connected to TMDB.", type: "ok" });
+  } catch (err) {
+    setAppTestButtonState("tmdb", { busy: false, text: err.message, type: "err" });
   }
 }
 
@@ -1755,8 +2001,10 @@ function wireAll(user) {
 
   // Requests
   wireRequestForm();
+  wireDiscoverForm();
   wireLidarrForm();
   bindButtonClick("reqRefreshBtn", loadRequestsTable);
+  bindButtonClick("discoverRefreshBtn", loadDiscoverResults);
   bindButtonClick("lidarrOptionsRefreshBtn", async () => {
     await loadLidarrOptions();
     await loadLidarrLibraryStats();
@@ -1767,6 +2015,8 @@ function wireAll(user) {
   // Jellyfin
   bindButtonClick("jellyRefreshNP", loadJellyfinNowPlaying);
   bindButtonClick("jellyRefreshLibs", loadJellyfinLibraries);
+  bindButtonClick("jellyUsersRefreshBtn", loadJellyfinUsers);
+  wireJellyfinUserForm();
   document.getElementById("publishNowPlayingBtn")?.addEventListener("click", async () => {
     setMsg("jellyNPMsg", "Publishing to Discord", "info");
     try {
@@ -1831,6 +2081,10 @@ function wireAll(user) {
       testOverseerrEnvConnection();
       return;
     }
+    if (button.id === "testTmdbEnvBtn") {
+      testTmdbEnvConnection();
+      return;
+    }
     if (button.id === "testJellyfinEnvBtn") {
       testJellyfinEnvConnection();
       return;
@@ -1875,9 +2129,6 @@ function wireAll(user) {
       setMsg("donationLogMsg", err.message, "err");
     }
   });
-
-  // Roulette
-  bindButtonClick("saveRouletteBtn", saveRouletteSettings);
 
   // System
   bindButtonClick("healthRefreshBtn", loadHealth);

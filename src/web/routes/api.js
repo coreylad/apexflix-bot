@@ -5,6 +5,25 @@ const { generateSessionToken, verifyPassword, hashPassword } = require("../../se
 const { createLidarrClient } = require("../../services/lidarr");
 const { createOverseerrClient } = require("../../services/overseerr");
 const { createJellyfinClient } = require("../../services/jellyfin");
+const { createTmdbClient } = require("../../services/tmdb");
+
+const DEFAULT_JELLYFIN_USER_GROUP_PRESETS = JSON.stringify(
+  [
+    {
+      id: "default",
+      name: "Default Members",
+      description: "Standard Jellyfin access with playback enabled.",
+      enableAllFolders: true,
+      enabledFolders: [],
+      enableMediaPlayback: true,
+      enableUserPreferenceAccess: true,
+      isAdministrator: false,
+      isDisabled: false
+    }
+  ],
+  null,
+  2
+);
 
 const DEFAULT_BOT_CONFIG = {
   requestsChannelId: "",
@@ -48,10 +67,8 @@ const DEFAULT_BOT_CONFIG = {
   donorTier2RoleId: "",
   donorTier3Amount: "",
   donorTier3RoleId: "",
-  rouletteAllowedRoleId: "",
-  rouletteStartTime: "10",
-  rouletteChooseTimeout: "30",
-  rouletteTimeBetweenRounds: "5"
+  jellyfinAdminRoleIds: "",
+  jellyfinUserGroupPresets: DEFAULT_JELLYFIN_USER_GROUP_PRESETS
 };
 
 function asBoolString(value, fallback = "false") {
@@ -68,6 +85,121 @@ function asBoolString(value, fallback = "false") {
 function normalizeId(value) {
   const raw = String(value ?? "").trim();
   return /^\d+$/.test(raw) ? raw : "";
+}
+
+function normalizeIdList(value) {
+  const parts = String(value ?? "")
+    .split(/[\s,]+/)
+    .map((item) => normalizeId(item))
+    .filter(Boolean);
+
+  return Array.from(new Set(parts)).join(",");
+}
+
+function sanitizePresetId(value) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized;
+}
+
+function sanitizeFolderList(value) {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  return Array.from(
+    new Set(
+      String(value ?? "")
+        .split(/[\n,]+/)
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function parseJellyfinUserGroupPresets(rawValue) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(rawValue || DEFAULT_JELLYFIN_USER_GROUP_PRESETS));
+  } catch (error) {
+    parsed = JSON.parse(DEFAULT_JELLYFIN_USER_GROUP_PRESETS);
+  }
+
+  if (!Array.isArray(parsed)) {
+    parsed = [];
+  }
+
+  const normalized = parsed
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const id = sanitizePresetId(item.id || item.key || item.name);
+      const name = String(item.name || id || "").trim();
+      if (!id || !name) {
+        return null;
+      }
+
+      const maxParentalRating = Number(item.maxParentalRating);
+      return {
+        id,
+        name,
+        description: String(item.description || "").trim(),
+        isAdministrator: Boolean(item.isAdministrator),
+        isDisabled: Boolean(item.isDisabled),
+        enableAllFolders: item.enableAllFolders !== false,
+        enabledFolders: sanitizeFolderList(item.enabledFolders),
+        enableMediaPlayback: item.enableMediaPlayback !== false,
+        enableCollectionManagement: Boolean(item.enableCollectionManagement),
+        enableSubtitleManagement: Boolean(item.enableSubtitleManagement),
+        enableLyricManagement: Boolean(item.enableLyricManagement),
+        enableUserPreferenceAccess: item.enableUserPreferenceAccess !== false,
+        enableContentDeletion: Boolean(item.enableContentDeletion),
+        enableContentDeletionFromFolders: sanitizeFolderList(item.enableContentDeletionFromFolders),
+        maxParentalRating: Number.isInteger(maxParentalRating) ? maxParentalRating : null
+      };
+    })
+    .filter(Boolean);
+
+  return normalized.length
+    ? normalized
+    : JSON.parse(DEFAULT_JELLYFIN_USER_GROUP_PRESETS);
+}
+
+function normalizeJellyfinUserGroupPresetsText(value) {
+  return JSON.stringify(parseJellyfinUserGroupPresets(value), null, 2);
+}
+
+function buildJellyfinPolicyFromPreset(preset) {
+  if (!preset || typeof preset !== "object") {
+    return null;
+  }
+
+  return {
+    IsAdministrator: Boolean(preset.isAdministrator),
+    IsDisabled: Boolean(preset.isDisabled),
+    EnableAllFolders: preset.enableAllFolders !== false,
+    EnabledFolders: sanitizeFolderList(preset.enabledFolders),
+    EnableMediaPlayback: preset.enableMediaPlayback !== false,
+    EnableCollectionManagement: Boolean(preset.enableCollectionManagement),
+    EnableSubtitleManagement: Boolean(preset.enableSubtitleManagement),
+    EnableLyricManagement: Boolean(preset.enableLyricManagement),
+    EnableUserPreferenceAccess: preset.enableUserPreferenceAccess !== false,
+    EnableContentDeletion: Boolean(preset.enableContentDeletion),
+    EnableContentDeletionFromFolders: sanitizeFolderList(preset.enableContentDeletionFromFolders),
+    MaxParentalRating: Number.isInteger(Number(preset.maxParentalRating)) ? Number(preset.maxParentalRating) : null
+  };
 }
 
 function normalizeBotConfig(input) {
@@ -120,10 +252,8 @@ function normalizeBotConfig(input) {
     donorTier2RoleId: normalizeId(source.donorTier2RoleId),
     donorTier3Amount: normalizeTierAmount(source.donorTier3Amount),
     donorTier3RoleId: normalizeId(source.donorTier3RoleId),
-    rouletteAllowedRoleId: normalizeId(source.rouletteAllowedRoleId),
-    rouletteStartTime: normalizePositiveInt(source.rouletteStartTime, '10', 5, 60),
-    rouletteChooseTimeout: normalizePositiveInt(source.rouletteChooseTimeout, '30', 10, 120),
-    rouletteTimeBetweenRounds: normalizePositiveInt(source.rouletteTimeBetweenRounds, '5', 2, 30)
+    jellyfinAdminRoleIds: normalizeIdList(source.jellyfinAdminRoleIds),
+    jellyfinUserGroupPresets: normalizeJellyfinUserGroupPresetsText(source.jellyfinUserGroupPresets)
   };
 }
 
@@ -168,6 +298,26 @@ function asOptionalBoolean(value, fallback = false) {
     return false;
   }
   return fallback;
+}
+
+function parseSeasonInput(rawValue) {
+  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return { mode: "none" };
+  }
+  if (normalized === "all") {
+    return { mode: "all" };
+  }
+  if (normalized === "latest") {
+    return { mode: "latest" };
+  }
+  if (/^\d+$/.test(normalized)) {
+    const seasonNumber = Number(normalized);
+    if (Number.isInteger(seasonNumber) && seasonNumber > 0) {
+      return { mode: "single", seasonNumber };
+    }
+  }
+  return { mode: "invalid" };
 }
 
 function parseCookies(cookieHeader) {
@@ -217,7 +367,7 @@ function requireAuth(db) {
   };
 }
 
-function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, bot, logger }) {
+function createApiRouter({ db, overseerr, tmdb, lidarr, jellyfin, config, envManager, bot, logger }) {
   const router = express.Router();
   const authMiddleware = requireAuth(db);
 
@@ -241,6 +391,13 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
       deviceId: firstNonEmpty([values.JELLYFIN_DEVICE_ID], config?.jellyfin?.deviceId || "apexflix-bot"),
       clientVersion: firstNonEmpty([values.JELLYFIN_CLIENT_VERSION], config?.jellyfin?.clientVersion || "1.0.0"),
       allowInsecureTls: asOptionalBoolean(values.JELLYFIN_ALLOW_INSECURE_TLS, config?.jellyfin?.allowInsecureTls || false)
+    };
+  }
+
+  function buildTmdbConfigFromValues(values = {}) {
+    return {
+      readAccessToken: firstNonEmpty([values.TMDB_API_READ_TOKEN], config?.tmdb?.readAccessToken || ""),
+      baseUrl: firstNonEmpty([values.TMDB_BASE_URL], config?.tmdb?.baseUrl || "https://api.themoviedb.org")
     };
   }
 
@@ -460,7 +617,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
       ...normalizeBotConfig(db.getBotConfig())
     };
 
-    res.json({ ok: true, values: merged });
+    res.json({ ok: true, values: merged, config: merged });
   });
 
   router.post("/admin/bot-config", authMiddleware, (req, res) => {
@@ -475,7 +632,8 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
     return res.json({
       ok: true,
       message: "Discord bot configuration saved.",
-      values: normalized
+      values: normalized,
+      config: normalized
     });
   });
 
@@ -914,6 +1072,34 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
     }
   });
 
+  router.post("/admin/tmdb/test", authMiddleware, async (req, res, next) => {
+    try {
+      const values = req.body?.values;
+      if (!values || typeof values !== "object") {
+        return res.status(400).json({ error: "values object is required" });
+      }
+
+      const testClient = createTmdbClient(buildTmdbConfigFromValues(values));
+      const [movieGenres, tvGenres, sample] = await Promise.all([
+        testClient.getGenres("movie"),
+        testClient.getGenres("tv"),
+        testClient.discover({ mediaType: "movie", category: "popular", page: 1 })
+      ]);
+
+      return res.json({
+        ok: true,
+        message: "Connected to TMDB using v4 bearer auth.",
+        details: {
+          movieGenres: movieGenres.length,
+          tvGenres: tvGenres.length,
+          sampleResults: Array.isArray(sample?.results) ? sample.results.length : 0
+        }
+      });
+    } catch (error) {
+      next(new Error(`TMDB test failed: ${error.message}`));
+    }
+  });
+
   router.post("/admin/lidarr/test", authMiddleware, async (req, res, next) => {
     try {
       const values = req.body?.values;
@@ -1002,6 +1188,63 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
   });
 
   router.use(authMiddleware);
+
+  router.get("/admin/jellyfin/users", async (req, res, next) => {
+    try {
+      const [users, libraries] = await Promise.all([
+        jellyfin.getUsers(),
+        jellyfin.getLibrarySections().catch(() => [])
+      ]);
+      const mergedConfig = {
+        ...DEFAULT_BOT_CONFIG,
+        ...normalizeBotConfig(db.getBotConfig())
+      };
+      const presets = parseJellyfinUserGroupPresets(mergedConfig.jellyfinUserGroupPresets);
+
+      return res.json({
+        ok: true,
+        users,
+        libraries,
+        presets
+      });
+    } catch (error) {
+      next(new Error(`Jellyfin user list failed: ${error.message}`));
+    }
+  });
+
+  router.post("/admin/jellyfin/users", async (req, res, next) => {
+    try {
+      const username = String(req.body?.username || "").trim();
+      const password = String(req.body?.password || "");
+      const presetId = sanitizePresetId(req.body?.presetId || "default");
+
+      if (!username) {
+        return res.status(400).json({ error: "Username is required." });
+      }
+
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters." });
+      }
+
+      const mergedConfig = {
+        ...DEFAULT_BOT_CONFIG,
+        ...normalizeBotConfig(db.getBotConfig())
+      };
+      const presets = parseJellyfinUserGroupPresets(mergedConfig.jellyfinUserGroupPresets);
+      const preset = presets.find((item) => item.id === presetId) || presets[0] || null;
+      const policy = buildJellyfinPolicyFromPreset(preset);
+      const user = await jellyfin.createUser({ username, password, policy });
+
+      return res.json({
+        ok: true,
+        message: `Created Jellyfin user ${user.name}.`,
+        user,
+        preset: preset ? { id: preset.id, name: preset.name } : null
+      });
+    } catch (error) {
+      next(new Error(`Jellyfin user create failed: ${error.message}`));
+    }
+  });
 
   // ---- Donation admin endpoints ---------------------------------------
   router.get("/admin/donations", (req, res, next) => {
@@ -1176,6 +1419,48 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
     }
   });
 
+  router.get("/discover/meta", async (req, res, next) => {
+    try {
+      const [movieGenres, tvGenres] = await Promise.all([
+        tmdb.getGenres("movie"),
+        tmdb.getGenres("tv")
+      ]);
+
+      return res.json({
+        ok: true,
+        categories: {
+          movie: ["popular", "trending", "upcoming", "now_playing", "top_rated", "discover"],
+          tv: ["popular", "trending", "airing_today", "on_the_air", "top_rated", "discover"]
+        },
+        genres: {
+          movie: movieGenres,
+          tv: tvGenres
+        }
+      });
+    } catch (error) {
+      next(new Error(`TMDB meta failed: ${error.message}`));
+    }
+  });
+
+  router.get("/discover", async (req, res, next) => {
+    try {
+      const mediaType = String(req.query.mediaType || "movie").trim().toLowerCase();
+      const category = String(req.query.category || "popular").trim().toLowerCase();
+      const page = Math.max(1, Math.min(500, Number(req.query.page) || 1));
+      const genre = String(req.query.genre || "").trim();
+      const query = String(req.query.query || "").trim();
+
+      if (!["movie", "tv"].includes(mediaType)) {
+        return res.status(400).json({ error: "mediaType must be movie or tv." });
+      }
+
+      const data = await tmdb.discover({ mediaType, category, page, genre, query });
+      return res.json({ ok: true, ...data });
+    } catch (error) {
+      next(new Error(`TMDB discover failed: ${error.message}`));
+    }
+  });
+
   router.get("/jellyfin/latest", async (req, res, next) => {
     try {
       const limit = Math.min(Number(req.query.limit) || 12, 50);
@@ -1243,7 +1528,7 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
 
   router.post("/request", async (req, res, next) => {
     try {
-      const { mediaType, mediaId, mediaQuery, discordUserId } = req.body;
+      const { mediaType, mediaId, mediaQuery, discordUserId, season } = req.body;
 
       if (mediaType === "music") {
         const query = String(mediaQuery || mediaId || "").trim();
@@ -1332,11 +1617,46 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
         }
       }
 
-      const request = await overseerr.requestMedia({ mediaType, mediaId, userId });
+      let seasons = [];
+      if (mediaType === "tv") {
+        const parsedSeason = parseSeasonInput(season);
+        if (parsedSeason.mode === "none") {
+          return res.status(400).json({ error: "TV requests require a season: 1, all, or latest." });
+        }
+        if (parsedSeason.mode === "invalid") {
+          return res.status(400).json({ error: "Invalid season format. Use 1, all, or latest." });
+        }
+
+        const availableSeasons = await overseerr.getTvSeasonNumbers(mediaId);
+        if (!availableSeasons.length) {
+          return res.status(400).json({ error: "No available seasons were found for that show in Overseerr." });
+        }
+
+        if (parsedSeason.mode === "all") {
+          seasons = availableSeasons;
+        } else if (parsedSeason.mode === "latest") {
+          seasons = [availableSeasons[availableSeasons.length - 1]];
+        } else if (!availableSeasons.includes(parsedSeason.seasonNumber)) {
+          return res.status(400).json({ error: `Season ${parsedSeason.seasonNumber} is not available. Choices: ${availableSeasons.join(", ")}` });
+        } else {
+          seasons = [parsedSeason.seasonNumber];
+        }
+      }
+
+      const request = await overseerr.requestMedia({ mediaType, mediaId, userId, seasons });
       const requestId = request.id || request.request?.id;
       const status = request.status || request.request?.status || 1;
-      const title =
+      let title =
         request.media?.title || request.media?.name || `TMDB ${mediaType} ${mediaId}`;
+
+      if ((!request.media?.title && !request.media?.name) && tmdb && typeof tmdb.getDetails === "function") {
+        try {
+          const details = await tmdb.getDetails(mediaType, mediaId);
+          title = firstNonEmpty([details?.title, title], title);
+        } catch (tmdbError) {
+          // Keep fallback title when TMDB details are unavailable.
+        }
+      }
 
       if (requestId) {
         db.upsertRequestEvent({
@@ -1355,7 +1675,8 @@ function createApiRouter({ db, overseerr, lidarr, jellyfin, config, envManager, 
         requestId,
         status,
         statusText: overseerr.getRequestStatusText(status),
-        title
+        title,
+        seasons
       });
     } catch (error) {
       next(error);

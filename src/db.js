@@ -59,6 +59,22 @@ function initializeDatabase(logger) {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS donation_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      platform TEXT NOT NULL,
+      transaction_id TEXT,
+      from_name TEXT NOT NULL,
+      discord_username TEXT,
+      discord_user_id TEXT,
+      amount REAL NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      message TEXT,
+      role_assigned INTEGER NOT NULL DEFAULT 0,
+      role_id TEXT,
+      raw_payload TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
 
   logger.info(`SQLite database initialized at ${dbPath}`);
@@ -159,6 +175,32 @@ function initializeDatabase(logger) {
     "UPDATE admin_users SET password_hash = ? WHERE id = ?"
   );
 
+  const insertDonationStmt = db.prepare(`
+    INSERT INTO donation_log (
+      platform, transaction_id, from_name, discord_username, discord_user_id,
+      amount, currency, message, raw_payload, created_at
+    ) VALUES (
+      @platform, @transactionId, @fromName, @discordUsername, @discordUserId,
+      @amount, @currency, @message, @rawPayload, @createdAt
+    )
+  `);
+
+  const getRecentDonationsStmt = db.prepare(
+    "SELECT * FROM donation_log ORDER BY created_at DESC LIMIT ?"
+  );
+
+  const getDonationByIdStmt = db.prepare(
+    "SELECT * FROM donation_log WHERE id = ?"
+  );
+
+  const markDonationRoleAssignedStmt = db.prepare(
+    "UPDATE donation_log SET role_assigned = 1, role_id = ? WHERE id = ?"
+  );
+
+  const updateDonationDiscordUserIdStmt = db.prepare(
+    "UPDATE donation_log SET discord_user_id = ? WHERE id = ?"
+  );
+
   const getAllBotConfigStmt = db.prepare("SELECT key, value FROM bot_config");
 
   const upsertBotConfigStmt = db.prepare(`
@@ -253,6 +295,29 @@ function initializeDatabase(logger) {
       });
 
       transaction(Object.entries(values));
+    },
+    insertDonation: ({ platform, transactionId, fromName, discordUsername, discordUserId, amount, currency, message, rawPayload }) => {
+      const result = insertDonationStmt.run({
+        platform: String(platform || ""),
+        transactionId: String(transactionId || ""),
+        fromName: String(fromName || "Anonymous"),
+        discordUsername: String(discordUsername || ""),
+        discordUserId: String(discordUserId || ""),
+        amount: Number(amount || 0),
+        currency: String(currency || "USD").toUpperCase(),
+        message: String(message || ""),
+        rawPayload: String(rawPayload || ""),
+        createdAt: new Date().toISOString()
+      });
+      return result.lastInsertRowid;
+    },
+    getRecentDonations: (limit = 50) => getRecentDonationsStmt.all(Math.min(limit, 200)),
+    getDonationById: (id) => getDonationByIdStmt.get(id) || null,
+    markDonationRoleAssigned: (id, roleId) => {
+      markDonationRoleAssignedStmt.run(String(roleId || ""), id);
+    },
+    updateDonationDiscordUserId: (id, discordUserId) => {
+      updateDonationDiscordUserIdStmt.run(String(discordUserId || ""), id);
     }
   };
 }

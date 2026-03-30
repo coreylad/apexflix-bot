@@ -202,6 +202,66 @@ function createJellyfinClient(config) {
     return Math.round(pct);
   }
 
+  function normalizeUser(user) {
+    const policy = user?.Policy || {};
+    return {
+      id: String(user?.Id || ""),
+      name: String(user?.Name || "").trim(),
+      serverId: String(user?.ServerId || ""),
+      isAdministrator: Boolean(policy?.IsAdministrator),
+      isDisabled: Boolean(policy?.IsDisabled),
+      enableAllFolders: policy?.EnableAllFolders !== false,
+      enabledFolders: Array.isArray(policy?.EnabledFolders)
+        ? policy.EnabledFolders.map((value) => String(value || "").trim()).filter(Boolean)
+        : []
+    };
+  }
+
+  function mergeUserPolicy(basePolicy, updates) {
+    const existing = basePolicy && typeof basePolicy === "object" ? basePolicy : {};
+    const patch = updates && typeof updates === "object" ? updates : {};
+    return {
+      ...existing,
+      ...patch,
+      EnabledFolders: Array.isArray(patch.EnabledFolders)
+        ? patch.EnabledFolders
+        : Array.isArray(existing.EnabledFolders)
+          ? existing.EnabledFolders
+          : [],
+      BlockedTags: Array.isArray(patch.BlockedTags)
+        ? patch.BlockedTags
+        : Array.isArray(existing.BlockedTags)
+          ? existing.BlockedTags
+          : [],
+      AllowedTags: Array.isArray(patch.AllowedTags)
+        ? patch.AllowedTags
+        : Array.isArray(existing.AllowedTags)
+          ? existing.AllowedTags
+          : [],
+      AuthenticationProviderId: String(
+        patch.AuthenticationProviderId || existing.AuthenticationProviderId || ""
+      ),
+      PasswordResetProviderId: String(
+        patch.PasswordResetProviderId || existing.PasswordResetProviderId || ""
+      )
+    };
+  }
+
+  async function fetchUserById(userId) {
+    const client = getClient();
+    const id = String(userId || "").trim();
+    if (!id) {
+      throw new Error("Jellyfin user ID is required.");
+    }
+
+    const response = await client.get(buildEndpoint(`Users/${id}`));
+    const user = response?.data || {};
+    return {
+      ...normalizeUser(user),
+      policy: user?.Policy && typeof user.Policy === "object" ? user.Policy : {}
+    };
+  }
+
   return {
     getServerInfo: async () => {
       const client = getClient();
@@ -230,10 +290,51 @@ function createJellyfinClient(config) {
       const client = getClient();
       const response = await client.get(buildEndpoint("Users"));
       const users = Array.isArray(response?.data) ? response.data : [];
-      return users.map((user) => ({
-        id: String(user?.Id || ""),
-        name: String(user?.Name || "").trim()
-      }));
+      return users.map(normalizeUser);
+    },
+    getUserById: async (userId) => {
+      return await fetchUserById(userId);
+    },
+    createUser: async ({ username, password = "", policy = null } = {}) => {
+      const client = getClient();
+      const normalizedUsername = String(username || "").trim();
+      if (!normalizedUsername) {
+        throw new Error("Jellyfin username is required.");
+      }
+
+      const response = await client.post(buildEndpoint("Users/New"), {
+        Name: normalizedUsername,
+        Password: String(password || "")
+      });
+
+      const created = response?.data || {};
+      const createdId = String(created?.Id || "").trim();
+      if (!createdId) {
+        throw new Error("Jellyfin returned no user ID after creation.");
+      }
+
+      if (String(password || "")) {
+        await client.post(buildEndpoint("Users/Password"), {
+          NewPw: String(password),
+          ResetPassword: false
+        }, {
+          params: { userId: createdId }
+        });
+      }
+
+      if (policy && typeof policy === "object") {
+        const current = await fetchUserById(createdId);
+        await client.post(buildEndpoint(`Users/${createdId}/Policy`), mergeUserPolicy(current?.policy, policy));
+      }
+
+      return await fetchUserById(createdId);
+    },
+    updateUserPolicy: async (userId, updates = {}) => {
+      const client = getClient();
+      const current = await fetchUserById(userId);
+      const merged = mergeUserPolicy(current?.policy, updates);
+      await client.post(buildEndpoint(`Users/${current.id}/Policy`), merged);
+      return await fetchUserById(current.id);
     },
     getLatestItems: async (limit = 12) => {
       const client = getClient();
@@ -413,9 +514,11 @@ function createJellyfinClient(config) {
       const folders = Array.isArray(response?.data) ? response.data : [];
 
       return folders.map((folder) => ({
+        id: String(folder?.ItemId || "").trim(),
         name: folder?.Name || "Unnamed",
         collectionType: folder?.CollectionType || "mixed",
-        pathCount: Array.isArray(folder?.Locations) ? folder.Locations.length : 0
+        pathCount: Array.isArray(folder?.Locations) ? folder.Locations.length : 0,
+        locations: Array.isArray(folder?.Locations) ? folder.Locations : []
       }));
     },
     ticksToDuration

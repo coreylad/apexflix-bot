@@ -106,9 +106,6 @@
           <button class="nav-btn" data-tab="tabDonations">
             <span class="nav-icon"></span> Donations
           </button>
-          <button class="nav-btn" data-tab="tabRoulette">
-            <span class="nav-icon"></span> Roulette
-          </button>
 
           <div class="nav-section-label">Admin</div>
           <button class="nav-btn" data-tab="tabLogs">
@@ -272,6 +269,47 @@
                   <thead><tr><th>#</th><th>Title</th><th>Type</th><th>Status</th></tr></thead>
                   <tbody id="reqTableBody"><tr><td colspan="4" class="empty-state">Loading</td></tr></tbody>
                 </table>
+              </div>
+            </div>
+
+            <div class="card col-span-2">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Discover With TMDB</div>
+                  <div class="card-subtitle">Browse popular, trending, top-rated, and upcoming titles with TMDB metadata.</div>
+                </div>
+                <button type="button" class="btn-secondary btn-sm" id="discoverRefreshBtn">Refresh</button>
+              </div>
+              <form id="discoverForm" style="display:grid;gap:0.9rem;margin-bottom:1rem">
+                <div class="settings-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+                  <label>Media Type
+                    <select id="discoverMediaType" name="mediaType">
+                      <option value="movie">Movie</option>
+                      <option value="tv">TV</option>
+                    </select>
+                  </label>
+                  <label>Category
+                    <select id="discoverCategory" name="category"></select>
+                  </label>
+                  <label>Genre
+                    <select id="discoverGenre" name="genre"></select>
+                  </label>
+                  <label>Page
+                    <input id="discoverPage" name="page" type="number" min="1" max="20" value="1" />
+                  </label>
+                </div>
+                <div class="settings-grid" style="grid-template-columns:2fr auto">
+                  <label>Search Title
+                    <input id="discoverQuery" name="query" type="text" placeholder="Optional title search" />
+                  </label>
+                  <div class="btn-row" style="align-items:flex-end">
+                    <button type="submit" class="btn-primary">Load Discover Feed</button>
+                  </div>
+                </div>
+              </form>
+              <div id="discoverMsg" class="msg"></div>
+              <div id="discoverResults" class="grid-2">
+                <div class="empty-state col-span-2">Choose filters to load TMDB results.</div>
               </div>
             </div>
           </div>
@@ -476,6 +514,39 @@
               </div>
               <div id="jellyStatsMsg" class="msg"></div>
             </div>
+
+            <div class="card col-span-2">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Jellyfin User Management</div>
+                  <div class="card-subtitle">Create Jellyfin users with access presets from the dashboard.</div>
+                </div>
+                <button type="button" class="btn-secondary btn-sm" id="jellyUsersRefreshBtn">Refresh</button>
+              </div>
+              <form id="jellyfinUserForm" style="display:grid;gap:0.9rem;margin-bottom:1rem">
+                <div class="settings-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+                  <label>Username
+                    <input id="jellyfinNewUsername" type="text" placeholder="newmember" />
+                  </label>
+                  <label>Password
+                    <input id="jellyfinNewPassword" type="password" autocomplete="new-password" placeholder="Minimum 8 characters" />
+                  </label>
+                  <label>Access Preset
+                    <select id="jellyfinPresetSelect"></select>
+                  </label>
+                </div>
+                <div class="btn-row">
+                  <button type="submit" class="btn-primary">Create Jellyfin User</button>
+                </div>
+              </form>
+              <div id="jellyUsersMsg" class="msg"></div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>User</th><th>Admin</th><th>Status</th><th>Library Access</th></tr></thead>
+                  <tbody id="jellyUsersBody"><tr><td colspan="4" class="empty-state">Loading</td></tr></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -629,6 +700,21 @@
                   <textarea name="statusAnnouncementTemplate" rows="4"></textarea>
                 </label>
               </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-title">Jellyfin User Management</div>
+              <div class="settings-grid one-col">
+                <label>Jellyfin Admin Role IDs
+                  <input name="jellyfinAdminRoleIds" type="text" placeholder="Comma-separated Discord role IDs allowed to create Jellyfin users" />
+                </label>
+                <label>Jellyfin User Group Presets
+                  <textarea name="jellyfinUserGroupPresets" rows="12" placeholder='[{"id":"default","name":"Default Members","enableAllFolders":true}]'></textarea>
+                </label>
+              </div>
+              <p class="text-sm muted" style="margin-top:0.75rem">
+                Presets use JSON and can include <code>id</code>, <code>name</code>, <code>enableAllFolders</code>, <code>enabledFolders</code>, <code>enableMediaPlayback</code>, <code>isAdministrator</code>, and <code>maxParentalRating</code>.
+              </p>
             </div>
           </form>
 
@@ -915,74 +1001,6 @@
               </table>
             </div>
             <div id="donationLogMsg" class="msg"></div>
-          </div>
-        </div>
-
-        <!--  TAB: Roulette  -->
-        <div id="tabRoulette" class="tab-pane">
-          <p class="pane-title">Roulette</p>
-          <p class="pane-sub">Configure the /roulette elimination game. Players join and the last one standing wins.</p>
-
-          <div class="grid-2">
-            <div class="card">
-              <div class="card-header">
-                <div>
-                  <div class="card-title">Game Settings</div>
-                  <div class="card-subtitle">Timings and role-based access control for /roulette.</div>
-                </div>
-              </div>
-              <div class="settings-grid one-col">
-                <label>Allowed Role ID
-                  <input id="rouletteAllowedRoleId" type="text" placeholder="Leave blank to allow anyone" />
-                  <span class="field-hint">Only members with this role can start a game. Leave blank to allow everyone.</span>
-                </label>
-                <label>Join Window (seconds)
-                  <input id="rouletteStartTime" type="number" min="5" max="60" placeholder="10" />
-                  <span class="field-hint">How long players have to join before the game starts (5–60s).</span>
-                </label>
-                <label>Action Timeout (seconds)
-                  <input id="rouletteChooseTimeout" type="number" min="10" max="120" placeholder="30" />
-                  <span class="field-hint">How long the chosen player has to act before auto-elimination (10–120s).</span>
-                </label>
-                <label>Time Between Rounds (seconds)
-                  <input id="rouletteTimeBetweenRounds" type="number" min="2" max="30" placeholder="5" />
-                  <span class="field-hint">Pause between rounds (2–30s).</span>
-                </label>
-              </div>
-              <div class="btn-row" style="margin-top:0.9rem">
-                <button type="button" class="btn-primary" id="saveRouletteBtn">Save Roulette Settings</button>
-              </div>
-              <div id="rouletteMsg" class="msg"></div>
-            </div>
-
-            <div class="card">
-              <div class="card-header">
-                <div>
-                  <div class="card-title">How It Works</div>
-                  <div class="card-subtitle">Game rules and ability overview.</div>
-                </div>
-              </div>
-              <div class="settings-section">
-                <div class="settings-title">Gameplay Loop</div>
-                <ol class="text-sm" style="padding-left:1.2rem;line-height:2.2;color:var(--muted-light)">
-                  <li>An admin (or allowed role) runs <code>/roulette</code> in any channel.</li>
-                  <li>Players click <strong>Join Game</strong> within the join window.</li>
-                  <li>Each round, the wheel spins and picks a random player.</li>
-                  <li>That player must <strong>eliminate</strong> someone or use a special ability.</li>
-                  <li>The <strong>last player standing</strong> wins!</li>
-                </ol>
-              </div>
-              <div class="settings-section" style="margin-top:0.8rem">
-                <div class="settings-title">Special Abilities (one-use per game)</div>
-                <ul class="text-sm" style="padding-left:1.2rem;line-height:2.2;color:var(--muted-light)">
-                  <li>💖 <strong>Revive</strong> — Bring an eliminated player back.</li>
-                  <li>🛡️ <strong>Shield</strong> — Protect a player from being kicked this round.</li>
-                  <li>🔄 <strong>Switch Turn</strong> — Pass your turn to another player.</li>
-                  <li>❄️ <strong>Freeze</strong> — Disable a player&rsquo;s abilities next round.</li>
-                  <li>🏳️ <strong>Withdraw</strong> — Voluntarily leave the game.</li>
-                </ul>
-              </div>
-            </div>
           </div>
         </div>
 

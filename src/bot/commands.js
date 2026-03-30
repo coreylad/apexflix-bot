@@ -29,6 +29,55 @@ function buildCommands() {
           .setRequired(false)
       ),
     new SlashCommandBuilder()
+      .setName("discover")
+      .setDescription("Discover popular and trending TMDB movies or shows")
+      .addStringOption((option) =>
+        option
+          .setName("media_type")
+          .setDescription("Discover movies or TV shows")
+          .addChoices(
+            { name: "Movie", value: "movie" },
+            { name: "TV", value: "tv" }
+          )
+          .setRequired(false)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("category")
+          .setDescription("What to browse")
+          .addChoices(
+            { name: "Popular", value: "popular" },
+            { name: "Trending", value: "trending" },
+            { name: "Top Rated", value: "top_rated" },
+            { name: "Upcoming", value: "upcoming" },
+            { name: "Now Playing", value: "now_playing" },
+            { name: "Airing Today", value: "airing_today" },
+            { name: "On The Air", value: "on_the_air" },
+            { name: "Discover", value: "discover" }
+          )
+          .setRequired(false)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("query")
+          .setDescription("Optional title search term")
+          .setRequired(false)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("genre")
+          .setDescription("Optional TMDB genre id for discover mode")
+          .setRequired(false)
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName("page")
+          .setDescription("Page number")
+          .setRequired(false)
+          .setMinValue(1)
+          .setMaxValue(20)
+      ),
+    new SlashCommandBuilder()
       .setName("request")
       .setDescription("Open an easy request form for movie, TV, or music"),
     new SlashCommandBuilder()
@@ -146,8 +195,26 @@ function buildCommands() {
       .setName("libraries")
       .setDescription("Show Jellyfin library sections and types"),
     new SlashCommandBuilder()
-      .setName("roulette")
-      .setDescription("Start a roulette elimination game — last player standing wins! 🎰")
+      .setName("jellyfinadduser")
+      .setDescription("Create a Jellyfin user from Discord (admin only)")
+      .addStringOption((option) =>
+        option
+          .setName("username")
+          .setDescription("Jellyfin username")
+          .setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("password")
+          .setDescription("Initial password")
+          .setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("group")
+          .setDescription("Configured Jellyfin access preset id")
+          .setRequired(false)
+      )
   ];
 }
 

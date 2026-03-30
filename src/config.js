@@ -49,6 +49,7 @@ function firstDefined(names, fallback = "") {
 const config = {
   discord: {},
   overseerr: {},
+  tmdb: {},
   lidarr: {},
   jellyfin: {},
   donations: {},
@@ -64,6 +65,9 @@ function refreshConfigFromProcess() {
   config.overseerr.apiKey = optionalTrimmed("OVERSEERR_API_KEY");
   config.overseerr.defaultUserId = optionalNumber("OVERSEERR_DEFAULT_USER_ID", 1);
   config.overseerr.allowInsecureTls = optionalBoolean("OVERSEERR_ALLOW_INSECURE_TLS", false);
+
+  config.tmdb.readAccessToken = optionalTrimmed("TMDB_API_READ_TOKEN");
+  config.tmdb.baseUrl = optionalTrimmed("TMDB_BASE_URL", "https://api.themoviedb.org").replace(/\/+$/, "");
 
   config.lidarr.url = firstDefined(["LIDARR_URL", "LIDARR_BASE_URL"]).replace(/\/$/, "");
   config.lidarr.apiKey = optionalTrimmed("LIDARR_API_KEY");
@@ -88,7 +92,12 @@ function refreshConfigFromProcess() {
   config.jellyfin.logDir = optional("JELLYFIN_LOG_DIR", optional("JELLYFIN_FFMPEG_LOG_DIR", "/var/log/jellyfin"));
 
   config.donations.kofiUrl = optionalTrimmed("KO_FI_URL");
-  config.donations.message = optionalTrimmed("DONATION_MESSAGE", "Support the server with a Ko-fi tip.");
+  config.donations.paypalUrl = optionalTrimmed("PAYPAL_URL");
+  config.donations.buyMeCoffeeUrl = optionalTrimmed("BUYMEACOFFEE_URL");
+  config.donations.patreonUrl = optionalTrimmed("PATREON_URL");
+  config.donations.githubSponsorsUrl = optionalTrimmed("GITHUB_SPONSORS_URL");
+  config.donations.kofiWebhookSecret = optionalTrimmed("KOFI_WEBHOOK_SECRET");
+  config.donations.message = optionalTrimmed("DONATION_MESSAGE", "Support the server with a donation!");
 
   config.app.port = optionalNumber("PORT", 1337);
   config.app.requestStatusPollSeconds = optionalNumber("REQUEST_STATUS_POLL_SECONDS", 60);

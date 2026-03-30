@@ -5,6 +5,7 @@ const {
   GatewayIntentBits,
   MessageFlags,
   ModalBuilder,
+  PermissionFlagsBits,
   REST,
   Routes,
   StringSelectMenuBuilder,
@@ -12,7 +13,24 @@ const {
   TextInputStyle
 } = require("discord.js");
 const { buildCommands } = require("./commands");
-const { handleRouletteCommand, handleRouletteInteraction, isRouletteInteraction } = require("./roulette");
+
+const DEFAULT_JELLYFIN_USER_GROUP_PRESETS = JSON.stringify(
+  [
+    {
+      id: "default",
+      name: "Default Members",
+      description: "Standard Jellyfin access with playback enabled.",
+      enableAllFolders: true,
+      enabledFolders: [],
+      enableMediaPlayback: true,
+      enableUserPreferenceAccess: true,
+      isAdministrator: false,
+      isDisabled: false
+    }
+  ],
+  null,
+  2
+);
 
 const REQUEST_MEDIA_TYPE_SELECT_ID = "request-media-type-select";
 const REQUEST_MODAL_ID_MOVIE = "apexflix-request-modal-movie";
@@ -21,7 +39,7 @@ const REQUEST_MODAL_ID_MUSIC = "apexflix-request-modal-music";
 const REQUEST_MODAL_MEDIA_ID = "media_id";
 const REQUEST_MODAL_SEASON = "season";
 
-function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
+function createDiscordBot({ config, logger, db, overseerr, tmdb, lidarr, jellyfin }) {
   const DEFAULT_BOT_CONFIG = {
     requestsChannelId: "",
     uploadsChannelId: "",
@@ -65,10 +83,8 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     donorTier2RoleId: "",
     donorTier3Amount: "",
     donorTier3RoleId: "",
-    rouletteAllowedRoleId: "",
-    rouletteStartTime: "10",
-    rouletteChooseTimeout: "30",
-    rouletteTimeBetweenRounds: "5"
+    jellyfinAdminRoleIds: "",
+    jellyfinUserGroupPresets: DEFAULT_JELLYFIN_USER_GROUP_PRESETS
   };
 
   let online = false;
@@ -106,6 +122,110 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
   function normalizeId(value) {
     const raw = String(value ?? "").trim();
     return /^\d+$/.test(raw) ? raw : "";
+  }
+
+  function normalizeIdList(value) {
+    return Array.from(
+      new Set(
+        String(value ?? "")
+          .split(/[\s,]+/)
+          .map((item) => normalizeId(item))
+          .filter(Boolean)
+      )
+    ).join(",");
+  }
+
+  function sanitizePresetId(value) {
+    return String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function sanitizeFolderList(value) {
+    if (Array.isArray(value)) {
+      return Array.from(
+        new Set(
+          value
+            .map((item) => String(item ?? "").trim())
+            .filter(Boolean)
+        )
+      );
+    }
+
+    return [];
+  }
+
+  function parseJellyfinUserGroupPresets(value) {
+    let parsed;
+    try {
+      parsed = JSON.parse(String(value || DEFAULT_JELLYFIN_USER_GROUP_PRESETS));
+    } catch (error) {
+      parsed = JSON.parse(DEFAULT_JELLYFIN_USER_GROUP_PRESETS);
+    }
+
+    if (!Array.isArray(parsed)) {
+      parsed = [];
+    }
+
+    const normalized = parsed
+      .map((item) => {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const id = sanitizePresetId(item.id || item.key || item.name);
+        const name = String(item.name || id || "").trim();
+        if (!id || !name) {
+          return null;
+        }
+
+        const maxParentalRating = Number(item.maxParentalRating);
+        return {
+          id,
+          name,
+          description: String(item.description || "").trim(),
+          isAdministrator: Boolean(item.isAdministrator),
+          isDisabled: Boolean(item.isDisabled),
+          enableAllFolders: item.enableAllFolders !== false,
+          enabledFolders: sanitizeFolderList(item.enabledFolders),
+          enableMediaPlayback: item.enableMediaPlayback !== false,
+          enableCollectionManagement: Boolean(item.enableCollectionManagement),
+          enableSubtitleManagement: Boolean(item.enableSubtitleManagement),
+          enableLyricManagement: Boolean(item.enableLyricManagement),
+          enableUserPreferenceAccess: item.enableUserPreferenceAccess !== false,
+          enableContentDeletion: Boolean(item.enableContentDeletion),
+          enableContentDeletionFromFolders: sanitizeFolderList(item.enableContentDeletionFromFolders),
+          maxParentalRating: Number.isInteger(maxParentalRating) ? maxParentalRating : null
+        };
+      })
+      .filter(Boolean);
+
+    return normalized.length
+      ? normalized
+      : JSON.parse(DEFAULT_JELLYFIN_USER_GROUP_PRESETS);
+  }
+
+  function buildJellyfinPolicyFromPreset(preset) {
+    if (!preset || typeof preset !== "object") {
+      return null;
+    }
+
+    return {
+      IsAdministrator: Boolean(preset.isAdministrator),
+      IsDisabled: Boolean(preset.isDisabled),
+      EnableAllFolders: preset.enableAllFolders !== false,
+      EnabledFolders: sanitizeFolderList(preset.enabledFolders),
+      EnableMediaPlayback: preset.enableMediaPlayback !== false,
+      EnableCollectionManagement: Boolean(preset.enableCollectionManagement),
+      EnableSubtitleManagement: Boolean(preset.enableSubtitleManagement),
+      EnableLyricManagement: Boolean(preset.enableLyricManagement),
+      EnableUserPreferenceAccess: preset.enableUserPreferenceAccess !== false,
+      EnableContentDeletion: Boolean(preset.enableContentDeletion),
+      EnableContentDeletionFromFolders: sanitizeFolderList(preset.enableContentDeletionFromFolders),
+      MaxParentalRating: Number.isInteger(Number(preset.maxParentalRating)) ? Number(preset.maxParentalRating) : null
+    };
   }
 
   function getBotConfig() {
@@ -157,11 +277,37 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
       donorTier2RoleId: normalizeId(stored.donorTier2RoleId || ""),
       donorTier3Amount: String(stored.donorTier3Amount || ""),
       donorTier3RoleId: normalizeId(stored.donorTier3RoleId || ""),
-      rouletteAllowedRoleId: normalizeId(stored.rouletteAllowedRoleId || DEFAULT_BOT_CONFIG.rouletteAllowedRoleId),
-      rouletteStartTime: String(stored.rouletteStartTime || DEFAULT_BOT_CONFIG.rouletteStartTime),
-      rouletteChooseTimeout: String(stored.rouletteChooseTimeout || DEFAULT_BOT_CONFIG.rouletteChooseTimeout),
-      rouletteTimeBetweenRounds: String(stored.rouletteTimeBetweenRounds || DEFAULT_BOT_CONFIG.rouletteTimeBetweenRounds)
+      jellyfinAdminRoleIds: normalizeIdList(stored.jellyfinAdminRoleIds || DEFAULT_BOT_CONFIG.jellyfinAdminRoleIds),
+      jellyfinUserGroupPresets: String(
+        stored.jellyfinUserGroupPresets || DEFAULT_BOT_CONFIG.jellyfinUserGroupPresets
+      )
     };
+  }
+
+  function getJellyfinPresetList(cfg = getBotConfig()) {
+    return parseJellyfinUserGroupPresets(cfg.jellyfinUserGroupPresets);
+  }
+
+  function hasConfiguredRole(member, roleIds) {
+    if (!member?.roles?.cache || !Array.isArray(roleIds)) {
+      return false;
+    }
+
+    return roleIds.some((roleId) => roleId && member.roles.cache.has(roleId));
+  }
+
+  function canManageJellyfinUsers(interaction) {
+    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      return true;
+    }
+
+    const cfg = getBotConfig();
+    const roleIds = [cfg.adminRoleId]
+      .concat(String(cfg.jellyfinAdminRoleIds || "").split(","))
+      .map((item) => normalizeId(item))
+      .filter(Boolean);
+
+    return hasConfiguredRole(interaction.member, roleIds);
   }
 
   function renderTemplate(template, context) {
@@ -1485,6 +1631,34 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     await interaction.reply(toEphemeralResponse(formatSearchResults(results)));
   }
 
+  async function handleDiscover(interaction) {
+    const mediaType = interaction.options.getString("media_type") || "movie";
+    const category = interaction.options.getString("category") || "popular";
+    const query = String(interaction.options.getString("query") || "").trim();
+    const genre = String(interaction.options.getString("genre") || "").trim();
+    const page = interaction.options.getInteger("page") || 1;
+
+    const data = await tmdb.discover({ mediaType, category, query, genre, page });
+    const results = Array.isArray(data?.results) ? data.results.slice(0, 8) : [];
+    if (!results.length) {
+      await interaction.reply(
+        toEphemeralResponse(`No TMDB results found for ${query ? `"${query}"` : `${mediaType} ${category}`}.`)
+      );
+      return;
+    }
+
+    const lines = results.map((item) => {
+      const date = item.releaseDate ? `, ${item.releaseDate.slice(0, 4)}` : "";
+      const rating = item.voteAverage ? `, rating ${item.voteAverage.toFixed(1)}` : "";
+      return `• ${item.title} [${item.mediaType}] - TMDB ID: ${item.id}${date}${rating}`;
+    });
+
+    const header = query
+      ? `TMDB search for "${query}" (${mediaType}, page ${data.page}/${data.totalPages}):`
+      : `TMDB ${category.replace(/_/g, " ")} ${mediaType} picks (page ${data.page}/${data.totalPages}):`;
+    await interaction.reply(toEphemeralResponse(`${header}\n${lines.join("\n")}`));
+  }
+
   async function processRequestSubmission(interaction, { mediaType, mediaInput, seasonInput }) {
     const botConfig = getBotConfig();
     if (
@@ -1920,6 +2094,39 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
     await interaction.reply(toEphemeralResponse(`Jellyfin library sections:\n${lines}`));
   }
 
+  async function handleJellyfinAddUser(interaction) {
+    if (!canManageJellyfinUsers(interaction)) {
+      await interaction.reply(
+        toEphemeralResponse("You do not have permission to create Jellyfin users. Configure Admin Role ID or Jellyfin Admin Role IDs in settings.")
+      );
+      return;
+    }
+
+    const username = String(interaction.options.getString("username", true) || "").trim();
+    const password = String(interaction.options.getString("password", true) || "");
+    const presetId = sanitizePresetId(interaction.options.getString("group") || "default");
+    if (password.length < 8) {
+      await interaction.reply(toEphemeralResponse("Password must be at least 8 characters."));
+      return;
+    }
+
+    const presets = getJellyfinPresetList();
+    const preset = presets.find((item) => item.id === presetId) || presets[0] || null;
+    const policy = buildJellyfinPolicyFromPreset(preset);
+    const user = await jellyfin.createUser({ username, password, policy });
+
+    const folderSummary = user.enableAllFolders
+      ? "all libraries"
+      : user.enabledFolders.length
+        ? `${user.enabledFolders.length} selected libraries`
+        : "no libraries";
+    await interaction.reply(
+      toEphemeralResponse(
+        `Created Jellyfin user ${user.name} with preset ${preset?.name || "Default"} (${folderSummary}).`
+      )
+    );
+  }
+
   async function handleMusicSearch(interaction) {
     const query = interaction.options.getString("query", true);
     const limit = interaction.options.getInteger("limit") || 5;
@@ -2122,18 +2329,6 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
   });
 
   client.on("interactionCreate", async (interaction) => {
-    if (interaction.isButton() && isRouletteInteraction(interaction.customId)) {
-      try {
-        await handleRouletteInteraction(interaction, getBotConfig());
-      } catch (err) {
-        logger.error(`Roulette interaction error: ${err.message}`);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: `Roulette error: ${err.message}`, flags: 64 }).catch(() => {});
-        }
-      }
-      return;
-    }
-
     if (interaction.isStringSelectMenu()) {
       if (interaction.customId === REQUEST_MEDIA_TYPE_SELECT_ID) {
         const mediaType = interaction.values[0];
@@ -2179,6 +2374,9 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         case "search":
           await handleSearch(interaction);
           break;
+        case "discover":
+          await handleDiscover(interaction);
+          break;
         case "request":
           await handleRequest(interaction);
           break;
@@ -2218,11 +2416,11 @@ function createDiscordBot({ config, logger, db, overseerr, lidarr, jellyfin }) {
         case "libraries":
           await handleLibraries(interaction);
           break;
+        case "jellyfinadduser":
+          await handleJellyfinAddUser(interaction);
+          break;
         case "requesthelp":
           await handleRequestHelp(interaction);
-          break;
-        case "roulette":
-          await handleRouletteCommand(interaction, getBotConfig());
           break;
         default:
           await interaction.reply(toEphemeralResponse("Unknown command."));

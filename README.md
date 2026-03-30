@@ -9,9 +9,11 @@ A self-contained Node.js app that runs:
 ## Features
 
 - Slash commands for searching and requesting media
+- TMDB-backed discovery for popular, trending, top-rated, and upcoming titles
 - User linking between Discord and Overseerr user accounts
 - Request status checks and DM notifications on status changes
-- Web UI for health, recent requests, and latest Jellyfin items
+- Web UI for health, requests, TMDB discovery, and latest Jellyfin items
+- Jellyfin user creation from the dashboard and Discord admin command flow
 - Discord bot config panel for channel routing and announcement automation
 - Private web login with session-based authentication
 - First-run setup wizard with admin user creation
@@ -43,7 +45,7 @@ npm install
 cp .env.example .env
 ```
 
-3. Edit `.env` with your Discord, Overseerr, and Jellyfin credentials.
+3. Edit `.env` with your Discord, Overseerr, Jellyfin, and TMDB credentials.
 
 You can skip manual `.env` editing and set everything through the web UI after startup.
 
@@ -63,10 +65,12 @@ npm start
 
 - `/link overseerr_username:<name>`
 - `/search query:<title> media_type:<all|movie|tv>`
+- `/discover media_type:<movie|tv> category:<popular|trending|top_rated|upcoming|now_playing|airing_today|on_the_air|discover>`
 - `/request media_type:<movie|tv> media_id:<id> season:<1|all|latest|season1|season[1]>`
 - `/requesthelp`
 - `/status request_id:<id>`
 - `/recent`
+- `/jellyfinadduser username:<name> password:<password> group:<preset-id>`
 
 ## Discord Automation Config (Web UI)
 
@@ -104,6 +108,7 @@ This app supports reverse proxies for both directions:
 Key settings:
 - `OVERSEERR_URL`: full external/internal URL ApexFlix should call, e.g. `https://apexflix.xyz/coreylad/overseerr`
 - `JELLYFIN_URL`: full URL ApexFlix should call, e.g. `https://apexflix.xyz/coreylad/jellyfin`
+- `TMDB_API_READ_TOKEN`: TMDB v4 read token used for `/discover` and dashboard discovery
 - `TRUST_PROXY=true`: trust `X-Forwarded-*` headers so secure cookies work behind HTTPS proxies
 - `APP_BASE_PATH=/` (or `/apexflix`): mount ApexFlix under a subpath
 - `OVERSEERR_ALLOW_INSECURE_TLS=true` only if your proxy uses self-signed TLS
@@ -113,6 +118,8 @@ Jellyfin advanced options:
 - `JELLYFIN_USER_ID`: explicit Jellyfin user ID (recommended for stable behavior)
 - `JELLYFIN_USERNAME`: optional fallback if user ID is not set
 - `JELLYFIN_CLIENT_NAME`, `JELLYFIN_DEVICE_NAME`, `JELLYFIN_DEVICE_ID`, `JELLYFIN_CLIENT_VERSION`: client metadata used in Jellyfin authorization header
+- `jellyfinAdminRoleIds` in Bot Config: Discord roles allowed to create Jellyfin users via `/jellyfinadduser`
+- `jellyfinUserGroupPresets` in Bot Config: JSON access presets used by the dashboard and `/jellyfinadduser`
 
 If `/api/jellyfin/latest` fails with HTTP 400:
 1. Confirm `JELLYFIN_URL` includes full scheme and path (for example `https://apexflix.xyz/coreylad/jellyfin`)
